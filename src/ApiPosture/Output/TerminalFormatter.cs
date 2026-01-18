@@ -54,23 +54,7 @@ public sealed class TerminalFormatter : IOutputFormatter
         }
         console.WriteLine();
 
-        // Summary panel
-        RenderSummary(console, result, filteredEndpoints.Count, filteredFindings.Count, options);
-
-        // Endpoints
-        if (sortedEndpoints.Count > 0)
-        {
-            if (endpointGroups is not null)
-            {
-                RenderGroupedEndpoints(console, endpointGroups, options);
-            }
-            else
-            {
-                RenderEndpoints(console, sortedEndpoints, options);
-            }
-        }
-
-        // Findings
+        // Findings details FIRST (so they appear at top when scrolling up)
         if (sortedFindings.Count > 0)
         {
             if (findingGroups is not null)
@@ -82,7 +66,40 @@ public sealed class TerminalFormatter : IOutputFormatter
                 RenderFindings(console, sortedFindings, options);
             }
         }
-        else
+
+        // Separator with scroll hint if there are findings
+        if (sortedFindings.Count > 0)
+        {
+            console.WriteLine();
+            var scrollHint = options.UseColors
+                ? "[dim]^^^^ Scroll up for finding details ^^^^[/]"
+                : "^^^^ Scroll up for finding details ^^^^";
+            console.Write(new Rule(scrollHint).RuleStyle("grey"));
+            console.WriteLine();
+        }
+
+        // Summary panel
+        RenderSummary(console, result, filteredEndpoints.Count, filteredFindings.Count, options);
+
+        // Severity summary chart (compact overview)
+        RenderSeveritySummary(console, result.Findings, options);
+
+        // Endpoints table at BOTTOM (visible immediately after scan)
+        if (sortedEndpoints.Count > 0)
+        {
+            console.WriteLine();
+            if (endpointGroups is not null)
+            {
+                RenderGroupedEndpoints(console, endpointGroups, options);
+            }
+            else
+            {
+                RenderEndpoints(console, sortedEndpoints, options);
+            }
+        }
+
+        // Final status
+        if (sortedFindings.Count == 0)
         {
             if (options.UseColors)
             {
@@ -93,9 +110,6 @@ public sealed class TerminalFormatter : IOutputFormatter
                 console.WriteLine("No security findings!");
             }
         }
-
-        // Severity summary chart
-        RenderSeveritySummary(console, result.Findings, options);
 
         console.WriteLine();
     }
