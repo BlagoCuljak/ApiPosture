@@ -7,13 +7,33 @@ using ApiPosture.Rules.Surface;
 namespace ApiPosture.Rules;
 
 /// <summary>
+/// Configuration options for the rule engine.
+/// </summary>
+public sealed class RuleEngineConfig
+{
+    /// <summary>
+    /// Custom sensitive keywords for AP007 rule. If null, default keywords are used.
+    /// </summary>
+    public string[]? SensitiveKeywords { get; init; }
+
+    /// <summary>
+    /// Gets the default configuration.
+    /// </summary>
+    public static RuleEngineConfig Default { get; } = new();
+}
+
+/// <summary>
 /// Orchestrates evaluation of all security rules against endpoints.
 /// </summary>
 public sealed class RuleEngine
 {
     private readonly IReadOnlyList<ISecurityRule> _rules;
 
-    public RuleEngine() : this(CreateDefaultRules())
+    public RuleEngine() : this(CreateDefaultRules(RuleEngineConfig.Default))
+    {
+    }
+
+    public RuleEngine(RuleEngineConfig config) : this(CreateDefaultRules(config))
     {
     }
 
@@ -68,7 +88,7 @@ public sealed class RuleEngine
         return findings;
     }
 
-    private static IReadOnlyList<ISecurityRule> CreateDefaultRules()
+    private static IReadOnlyList<ISecurityRule> CreateDefaultRules(RuleEngineConfig config)
     {
         return new ISecurityRule[]
         {
@@ -85,7 +105,7 @@ public sealed class RuleEngine
             new WeakRoleNamingRule(),                    // AP006
 
             // Surface rules
-            new SensitiveRouteKeywordsRule(),            // AP007
+            new SensitiveRouteKeywordsRule(config.SensitiveKeywords),  // AP007
             new MinimalApiWithoutAuthRule()              // AP008
         };
     }

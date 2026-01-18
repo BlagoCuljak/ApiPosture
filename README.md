@@ -8,6 +8,9 @@ A cross-platform CLI security inspection tool for ASP.NET Core APIs. Performs st
 - Discovers endpoints from both Controllers and Minimal APIs
 - Detects 8 common security issues with authorization
 - Multiple output formats: Terminal, JSON, Markdown
+- Sorting, filtering, and grouping of results
+- Configuration file support with suppressions
+- Accessibility options (no-color, no-icons)
 - CI/CD integration with `--fail-on` exit codes
 - Cross-platform .NET Global Tool
 
@@ -42,6 +45,40 @@ apiposture scan . --severity medium
 
 # CI integration - fail if high severity findings
 apiposture scan . --fail-on high
+
+# Sorting
+apiposture scan . --sort-by route --sort-dir asc
+
+# Filtering
+apiposture scan . --classification public --method POST,DELETE
+apiposture scan . --route-contains admin --api-style controller
+
+# Grouping
+apiposture scan . --group-by controller
+apiposture scan . --group-findings-by severity
+
+# Accessibility (no colors/icons)
+apiposture scan . --no-color --no-icons
+
+# Use config file
+apiposture scan . --config .apiposture.json
+```
+
+## Configuration File
+
+Create `.apiposture.json` in your project root:
+
+```json
+{
+  "severity": { "default": "low", "failOn": "high" },
+  "suppressions": [
+    { "route": "/api/health", "rules": ["AP001"], "reason": "Intentionally public" }
+  ],
+  "rules": {
+    "AP007": { "sensitiveKeywords": ["admin", "debug", "secret"] }
+  },
+  "display": { "useColors": true, "useIcons": true }
+}
 ```
 
 ## Security Rules

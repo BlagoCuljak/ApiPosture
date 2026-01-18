@@ -1,5 +1,8 @@
 using System.Text;
+using ApiPosture.Core.Filtering;
+using ApiPosture.Core.Grouping;
 using ApiPosture.Core.Models;
+using ApiPosture.Core.Sorting;
 
 namespace ApiPosture.Output;
 
@@ -8,9 +11,29 @@ namespace ApiPosture.Output;
 /// </summary>
 public sealed class MarkdownFormatter : IOutputFormatter
 {
-    public string Format(ScanResult result, Severity minSeverity)
+    public string Format(ScanResult result, OutputOptions options)
     {
         var sb = new StringBuilder();
+        var accessibility = options.Accessibility;
+
+        // Apply filtering
+        var endpointFilter = new EndpointFilter(options.FilterOptions);
+        var findingFilter = new FindingFilter(options.FilterOptions);
+
+        var filteredEndpoints = endpointFilter.Filter(result.Endpoints).ToList();
+        var filteredFindings = findingFilter.Filter(result.GetFindingsBySeverity(options.MinSeverity)).ToList();
+
+        // Apply sorting
+        var endpointSorter = new EndpointSorter(options.SortOptions);
+        var findingSorter = new FindingSorter(options.SortOptions);
+
+        var sortedEndpoints = endpointSorter.Sort(filteredEndpoints).ToList();
+        var sortedFindings = findingSorter.Sort(filteredFindings).ToList();
+
+        // Apply grouping
+        var grouper = new EndpointGrouper(options.GroupOptions);
+        var endpointGroups = grouper.GroupEndpoints(sortedEndpoints);
+        var findingGroups = grouper.GroupFindings(sortedFindings);
 
         // Header
         sb.AppendLine("# ApiPosture Security Scan Report");
@@ -19,6 +42,50 @@ public sealed class MarkdownFormatter : IOutputFormatter
         sb.AppendLine();
 
         // Summary
+        RenderSummary(sb, result, filteredEndpoints.Count, filteredFindings.Count);
+
+        // Severity breakdown
+        RenderSeverityBreakdown(sb, result.Findings, accessibility);
+
+        // Endpoints
+        if (sortedEndpoints.Count > 0)
+        {
+            if (endpointGroups is not null)
+            {
+                RenderGroupedEndpoints(sb, endpointGroups, accessibility);
+            }
+            else
+            {
+                RenderEndpoints(sb, sortedEndpoints, accessibility);
+            }
+        }
+
+        // Findings
+        if (sortedFindings.Count > 0)
+        {
+            if (findingGroups is not null)
+            {
+                RenderGroupedFindings(sb, findingGroups, accessibility);
+            }
+            else
+            {
+                RenderFindings(sb, sortedFindings, accessibility);
+            }
+        }
+        else
+        {
+            sb.AppendLine("## Security Findings");
+            sb.AppendLine();
+            var successIndicator = accessibility.GetSuccessIndicator();
+            sb.AppendLine($"{successIndicator} No security findings detected!");
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
+
+    private void RenderSummary(StringBuilder sb, ScanResult result, int filteredEndpoints, int filteredFindings)
+    {
         sb.AppendLine("## Summary");
         sb.AppendLine();
         sb.AppendLine("| Metric | Value |");
@@ -26,13 +93,17 @@ public sealed class MarkdownFormatter : IOutputFormatter
         sb.AppendLine($"| Scanned Path | `{result.ScannedPath}` |");
         sb.AppendLine($"| Files Scanned | {result.ScannedFiles.Count} |");
         sb.AppendLine($"| Failed Files | {result.FailedFiles.Count} |");
-        sb.AppendLine($"| Endpoints Found | {result.Endpoints.Count} |");
+        sb.AppendLine($"| Total Endpoints | {result.Endpoints.Count} |");
+        sb.AppendLine($"| Filtered Endpoints | {filteredEndpoints} |");
         sb.AppendLine($"| Total Findings | {result.Findings.Count} |");
+        sb.AppendLine($"| Filtered Findings | {filteredFindings} |");
         sb.AppendLine($"| Scan Duration | {result.Duration.TotalMilliseconds:F0}ms |");
         sb.AppendLine();
+    }
 
-        // Severity breakdown
-        var severityCounts = result.Findings
+    private void RenderSeverityBreakdown(StringBuilder sb, IReadOnlyList<Finding> findings, AccessibilityHelper accessibility)
+    {
+        var severityCounts = findings
             .GroupBy(f => f.Severity)
             .OrderByDescending(g => g.Key)
             .ToList();
@@ -43,79 +114,97 @@ public sealed class MarkdownFormatter : IOutputFormatter
             sb.AppendLine();
             foreach (var group in severityCounts)
             {
-                var emoji = group.Key switch
-                {
-                    Severity.Critical => "🔴",
-                    Severity.High => "🟠",
-                    Severity.Medium => "🟡",
-                    Severity.Low => "🔵",
-                    Severity.Info => "⚪",
-                    _ => "⚪"
-                };
-                sb.AppendLine($"- {emoji} **{group.Key}:** {group.Count()}");
+                var indicator = accessibility.GetSeverityIndicator(group.Key);
+                sb.AppendLine($"- {indicator} **{group.Key}:** {group.Count()}");
             }
             sb.AppendLine();
         }
+    }
 
-        // Endpoints table
-        if (result.Endpoints.Count > 0)
+    private void RenderEndpoints(StringBuilder sb, IEnumerable<Endpoint> endpoints, AccessibilityHelper accessibility)
+    {
+        sb.AppendLine("## Discovered Endpoints");
+        sb.AppendLine();
+        sb.AppendLine("| Route | Methods | Type | Classification |");
+        sb.AppendLine("|-------|---------|------|----------------|");
+
+        foreach (var endpoint in endpoints)
         {
-            sb.AppendLine("## Discovered Endpoints");
+            var typeIndicator = accessibility.GetEndpointTypeIndicator(endpoint.Type);
+            var classIndicator = accessibility.GetClassificationIndicator(endpoint.Classification);
+            sb.AppendLine($"| `{endpoint.Route}` | {endpoint.MethodsDisplay} | {typeIndicator} {endpoint.Type} | {classIndicator} {endpoint.Classification} |");
+        }
+        sb.AppendLine();
+    }
+
+    private void RenderGroupedEndpoints(StringBuilder sb, IReadOnlyList<EndpointGroup> groups, AccessibilityHelper accessibility)
+    {
+        sb.AppendLine("## Discovered Endpoints");
+        sb.AppendLine();
+
+        foreach (var group in groups)
+        {
+            sb.AppendLine($"### {group.DisplayName} ({group.Count} endpoints)");
             sb.AppendLine();
             sb.AppendLine("| Route | Methods | Type | Classification |");
             sb.AppendLine("|-------|---------|------|----------------|");
 
-            foreach (var endpoint in result.Endpoints.OrderBy(e => e.Route))
+            foreach (var endpoint in group.Endpoints)
             {
-                sb.AppendLine($"| `{endpoint.Route}` | {endpoint.MethodsDisplay} | {endpoint.Type} | {endpoint.Classification} |");
+                var typeIndicator = accessibility.GetEndpointTypeIndicator(endpoint.Type);
+                var classIndicator = accessibility.GetClassificationIndicator(endpoint.Classification);
+                sb.AppendLine($"| `{endpoint.Route}` | {endpoint.MethodsDisplay} | {typeIndicator} {endpoint.Type} | {classIndicator} {endpoint.Classification} |");
             }
             sb.AppendLine();
         }
+    }
 
-        // Findings
-        var filteredFindings = result.GetFindingsBySeverity(minSeverity);
+    private void RenderFindings(StringBuilder sb, IEnumerable<Finding> findings, AccessibilityHelper accessibility)
+    {
+        sb.AppendLine("## Security Findings");
+        sb.AppendLine();
 
-        if (filteredFindings.Count > 0)
+        foreach (var finding in findings)
         {
-            sb.AppendLine("## Security Findings");
+            RenderFinding(sb, finding, accessibility);
+        }
+    }
+
+    private void RenderGroupedFindings(StringBuilder sb, IReadOnlyList<FindingGroup> groups, AccessibilityHelper accessibility)
+    {
+        sb.AppendLine("## Security Findings");
+        sb.AppendLine();
+
+        foreach (var group in groups)
+        {
+            sb.AppendLine($"### {group.DisplayName} ({group.Count})");
             sb.AppendLine();
 
-            foreach (var finding in filteredFindings.OrderByDescending(f => f.Severity))
+            foreach (var finding in group.Findings)
             {
-                var severityBadge = finding.Severity switch
-                {
-                    Severity.Critical => "🔴 Critical",
-                    Severity.High => "🟠 High",
-                    Severity.Medium => "🟡 Medium",
-                    Severity.Low => "🔵 Low",
-                    Severity.Info => "⚪ Info",
-                    _ => finding.Severity.ToString()
-                };
-
-                sb.AppendLine($"### [{finding.RuleId}] {finding.RuleName}");
-                sb.AppendLine();
-                sb.AppendLine($"**Severity:** {severityBadge}");
-                sb.AppendLine();
-                sb.AppendLine($"**Route:** `{finding.Endpoint.Route}`");
-                sb.AppendLine();
-                sb.AppendLine($"**Location:** `{finding.Endpoint.Location}`");
-                sb.AppendLine();
-                sb.AppendLine(finding.Message);
-                sb.AppendLine();
-                sb.AppendLine($"> **Recommendation:** {finding.Recommendation}");
-                sb.AppendLine();
-                sb.AppendLine("---");
-                sb.AppendLine();
+                RenderFinding(sb, finding, accessibility, headerLevel: 4);
             }
         }
-        else
-        {
-            sb.AppendLine("## Security Findings");
-            sb.AppendLine();
-            sb.AppendLine("✅ No security findings detected!");
-            sb.AppendLine();
-        }
+    }
 
-        return sb.ToString();
+    private void RenderFinding(StringBuilder sb, Finding finding, AccessibilityHelper accessibility, int headerLevel = 3)
+    {
+        var header = new string('#', headerLevel);
+        var severityIndicator = accessibility.GetSeverityIndicator(finding.Severity);
+
+        sb.AppendLine($"{header} [{finding.RuleId}] {finding.RuleName}");
+        sb.AppendLine();
+        sb.AppendLine($"**Severity:** {severityIndicator} {finding.Severity}");
+        sb.AppendLine();
+        sb.AppendLine($"**Route:** `{finding.Endpoint.Route}`");
+        sb.AppendLine();
+        sb.AppendLine($"**Location:** `{finding.Endpoint.Location}`");
+        sb.AppendLine();
+        sb.AppendLine(finding.Message);
+        sb.AppendLine();
+        sb.AppendLine($"> **Recommendation:** {finding.Recommendation}");
+        sb.AppendLine();
+        sb.AppendLine("---");
+        sb.AppendLine();
     }
 }

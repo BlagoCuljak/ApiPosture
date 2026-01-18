@@ -10,5 +10,5 @@ public interface IOutputFormatter
     /// <summary>
     /// Formats the scan result for output.
     /// </summary>
-    string Format(ScanResult result, Severity minSeverity);
+    string Format(ScanResult result, OutputOptions options);
 }

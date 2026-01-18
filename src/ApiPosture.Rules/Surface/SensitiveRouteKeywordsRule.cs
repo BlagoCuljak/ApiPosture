@@ -11,7 +11,7 @@ public sealed class SensitiveRouteKeywordsRule : ISecurityRule
     public string Name => "Sensitive route keywords exposed";
     public Severity DefaultSeverity => Severity.Medium;
 
-    private static readonly string[] SensitiveKeywords =
+    private static readonly string[] DefaultKeywords =
     [
         "admin",
         "debug",
@@ -32,6 +32,29 @@ public sealed class SensitiveRouteKeywordsRule : ISecurityRule
         "purge"
     ];
 
+    private readonly string[] _sensitiveKeywords;
+
+    /// <summary>
+    /// Creates a new instance with default sensitive keywords.
+    /// </summary>
+    public SensitiveRouteKeywordsRule() : this(null)
+    {
+    }
+
+    /// <summary>
+    /// Creates a new instance with custom sensitive keywords.
+    /// </summary>
+    /// <param name="customKeywords">Custom keywords to use instead of defaults. Pass null to use defaults.</param>
+    public SensitiveRouteKeywordsRule(string[]? customKeywords)
+    {
+        _sensitiveKeywords = customKeywords is { Length: > 0 } ? customKeywords : DefaultKeywords;
+    }
+
+    /// <summary>
+    /// Gets the keywords currently being used for detection.
+    /// </summary>
+    public IReadOnlyList<string> Keywords => _sensitiveKeywords;
+
     public Finding? Evaluate(Endpoint endpoint)
     {
         // Only check public endpoints
@@ -39,7 +62,7 @@ public sealed class SensitiveRouteKeywordsRule : ISecurityRule
             return null;
 
         var route = endpoint.Route.ToLowerInvariant();
-        var foundKeywords = SensitiveKeywords
+        var foundKeywords = _sensitiveKeywords
             .Where(keyword => route.Contains(keyword, StringComparison.OrdinalIgnoreCase))
             .ToList();
 
