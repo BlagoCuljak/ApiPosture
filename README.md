@@ -8,6 +8,14 @@
 
 A cross-platform CLI security inspection tool for ASP.NET Core APIs. Performs static source-code analysis using Roslyn to identify authorization misconfigurations and security risks.
 
+### Terminal Output
+
+![Terminal Output](assets/images/result1.png)
+
+### Findings Report
+
+![Findings Report](assets/images/result2.png)
+
 ## Features
 
 - Static analysis of ASP.NET Core projects (no compilation required)
@@ -101,7 +109,7 @@ Create `.apiposture.json` in your project root:
 | AP008 | Minimal API without auth | High | Minimal API endpoint with no auth chain |
 
 ## Example Output
-
+### Sample Terminal Output
 ```
 ╭─────────────────┬────────────────────────────────╮
 │ Metric          │ Value                          │
@@ -121,6 +129,140 @@ Create `.apiposture.json` in your project root:
 │ /api/orders          │ POST    │ MinimalApi │ PolicyRestricted │
 ╰──────────────────────┴─────────┴────────────┴──────────────────╯
 ```
+
+## GitHub Actions Integration
+
+Integrate ApiPosture into your CI/CD pipeline to automatically scan for security issues on every commit or pull request.
+
+### Basic Workflow
+
+Create `.github/workflows/api-security-scan.yml`:
+
+```yaml
+name: API Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+    
+    - name: Install ApiPosture
+      run: dotnet tool install --global ApiPosture
+    
+    - name: Scan API for security issues
+      run: apiposture scan ./src/YourWebApi --fail-on high
+    
+    - name: Upload scan results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: api-security-scan
+        path: scan-results.json
+```
+
+### Advanced Workflow with Reports
+
+```yaml
+name: API Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+    
+    - name: Install ApiPosture
+      run: dotnet tool install --global ApiPosture
+    
+    - name: Run security scan
+      id: scan
+      continue-on-error: true
+      run: |
+        apiposture scan ./src/YourWebApi \
+          --output json \
+          --output-file scan-results.json \
+          --fail-on high
+    
+    - name: Generate Markdown report
+      if: always()
+      run: |
+        apiposture scan ./src/YourWebApi \
+          --output markdown \
+          --output-file api-security-report.md
+    
+    - name: Upload JSON results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-scan-json
+        path: scan-results.json
+    
+    - name: Upload Markdown report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-scan-report
+        path: api-security-report.md
+    
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request' && always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('api-security-report.md', 'utf8');
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## 🔒 API Security Scan Results\n\n${report}`
+          });
+    
+    - name: Fail if high severity issues found
+      if: steps.scan.outcome == 'failure'
+      run: exit 1
+```
+
+### Configuration Options
+
+- `--fail-on <severity>`: Exit with code 1 if findings of specified severity or higher are found (critical, high, medium, low)
+- `--output json`: Generate machine-readable JSON output for further processing
+- `--output markdown`: Generate human-readable Markdown reports
+- `--severity <level>`: Set minimum severity level to report
+- `--config .apiposture.json`: Use configuration file for suppressions and custom rules
+
+### Exit Codes
+
+- `0`: Scan completed successfully with no findings above the fail threshold
+- `1`: Findings above the fail threshold were detected
+- `2`: Error during scan execution
 
 ## Project Structure
 
