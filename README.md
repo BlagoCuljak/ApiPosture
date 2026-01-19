@@ -1,5 +1,11 @@
 # ApiPosture
 
+[![Build and Test](https://github.com/BlagoCuljak/ApiPosture/actions/workflows/build.yml/badge.svg)](https://github.com/BlagoCuljak/ApiPosture/actions/workflows/build.yml)
+[![NuGet Version](https://img.shields.io/nuget/v/ApiPosture?logo=nuget&label=NuGet)](https://www.nuget.org/packages/ApiPosture)
+[![NuGet Downloads](https://img.shields.io/nuget/dt/ApiPosture?logo=nuget&label=Downloads)](https://www.nuget.org/packages/ApiPosture)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![.NET](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
+
 A cross-platform CLI security inspection tool for ASP.NET Core APIs. Performs static source-code analysis using Roslyn to identify authorization misconfigurations and security risks.
 
 ## Features
@@ -143,6 +149,14 @@ dotnet test
 # Run against sample project
 dotnet run --project src/ApiPosture -- scan samples/SampleWebApi
 ```
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+- [Report a bug](https://github.com/BlagoCuljak/ApiPosture/issues/new?template=bug_report.md)
+- [Request a feature](https://github.com/BlagoCuljak/ApiPosture/issues/new?template=feature_request.md)
+- [Security Policy](SECURITY.md)
 
 ## License
 
