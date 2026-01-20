@@ -43,6 +43,9 @@ public sealed class ControllerEndpointDiscoverer : IEndpointDiscoverer
     private readonly SecurityClassifier _classifier = new();
 
     public IEnumerable<Endpoint> Discover(SyntaxTree syntaxTree)
+        => Discover(syntaxTree, GlobalAuthorizationInfo.Empty);
+
+    public IEnumerable<Endpoint> Discover(SyntaxTree syntaxTree, GlobalAuthorizationInfo globalAuth)
     {
         var root = syntaxTree.GetCompilationUnitRoot();
         var filePath = syntaxTree.FilePath;
@@ -56,6 +59,9 @@ public sealed class ControllerEndpointDiscoverer : IEndpointDiscoverer
             var controllerRoute = GetControllerRoute(classDecl);
             var controllerAuth = _authExtractor.ExtractFromAttributes(classDecl.AttributeLists);
 
+            // Apply global auth if controller has no explicit auth
+            var effectiveControllerAuth = ApplyGlobalAuth(controllerAuth, globalAuth);
+
             foreach (var method in classDecl.Members.OfType<MethodDeclarationSyntax>())
             {
                 if (!IsActionMethod(method))
@@ -65,13 +71,36 @@ public sealed class ControllerEndpointDiscoverer : IEndpointDiscoverer
                     method,
                     controllerName,
                     controllerRoute,
-                    controllerAuth,
+                    effectiveControllerAuth,
                     filePath);
 
                 if (endpoint != null)
                     yield return endpoint;
             }
         }
+    }
+
+    private static AuthorizationInfo ApplyGlobalAuth(AuthorizationInfo controllerAuth, GlobalAuthorizationInfo globalAuth)
+    {
+        // If controller already has explicit auth or AllowAnonymous, don't override
+        if (controllerAuth.HasAuthorize || controllerAuth.HasAllowAnonymous)
+            return controllerAuth;
+
+        // If global FallbackPolicy protects all endpoints, inherit from it
+        if (globalAuth.ProtectsAllEndpointsByDefault)
+        {
+            return new AuthorizationInfo
+            {
+                HasAuthorize = controllerAuth.HasAuthorize,
+                HasAllowAnonymous = controllerAuth.HasAllowAnonymous,
+                Roles = controllerAuth.Roles,
+                Policies = controllerAuth.Policies,
+                AuthenticationSchemes = controllerAuth.AuthenticationSchemes,
+                InheritedFrom = globalAuth.ToAuthorizationInfo()
+            };
+        }
+
+        return controllerAuth;
     }
 
     private bool IsController(ClassDeclarationSyntax classDecl)

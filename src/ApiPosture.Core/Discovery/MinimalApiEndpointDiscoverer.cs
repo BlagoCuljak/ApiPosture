@@ -1,3 +1,4 @@
+using ApiPosture.Core.Authorization;
 using ApiPosture.Core.Classification;
 using ApiPosture.Core.Models;
 using Microsoft.CodeAnalysis;
@@ -25,6 +26,9 @@ public sealed class MinimalApiEndpointDiscoverer : IEndpointDiscoverer
     private readonly SecurityClassifier _classifier = new();
 
     public IEnumerable<Endpoint> Discover(SyntaxTree syntaxTree)
+        => Discover(syntaxTree, GlobalAuthorizationInfo.Empty);
+
+    public IEnumerable<Endpoint> Discover(SyntaxTree syntaxTree, GlobalAuthorizationInfo globalAuth)
     {
         var root = syntaxTree.GetCompilationUnitRoot();
         var filePath = syntaxTree.FilePath;
@@ -32,13 +36,13 @@ public sealed class MinimalApiEndpointDiscoverer : IEndpointDiscoverer
         // Find all invocation expressions that match Map* patterns
         foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
-            var endpoint = TryCreateEndpoint(invocation, filePath);
+            var endpoint = TryCreateEndpoint(invocation, filePath, globalAuth);
             if (endpoint != null)
                 yield return endpoint;
         }
     }
 
-    private Endpoint? TryCreateEndpoint(InvocationExpressionSyntax invocation, string filePath)
+    private Endpoint? TryCreateEndpoint(InvocationExpressionSyntax invocation, string filePath, GlobalAuthorizationInfo globalAuth)
     {
         // Check if this is a Map* method call
         var (methodName, httpMethod) = GetMapMethod(invocation);
@@ -58,7 +62,7 @@ public sealed class MinimalApiEndpointDiscoverer : IEndpointDiscoverer
         }
 
         // Analyze the fluent chain for authorization
-        var auth = AnalyzeAuthorizationChain(invocation);
+        var auth = AnalyzeAuthorizationChain(invocation, globalAuth);
         var classification = _classifier.Classify(auth);
 
         var location = invocation.GetLocation();
@@ -153,7 +157,7 @@ public sealed class MinimalApiEndpointDiscoverer : IEndpointDiscoverer
         return $"{prefix}/{route}";
     }
 
-    private AuthorizationInfo AnalyzeAuthorizationChain(InvocationExpressionSyntax invocation)
+    private AuthorizationInfo AnalyzeAuthorizationChain(InvocationExpressionSyntax invocation, GlobalAuthorizationInfo globalAuth)
     {
         var hasRequireAuth = false;
         var hasAllowAnonymous = false;
@@ -208,13 +212,34 @@ public sealed class MinimalApiEndpointDiscoverer : IEndpointDiscoverer
         // Also check if the chain starts from a group with authorization
         var groupAuth = AnalyzeGroupAuthorization(invocation);
 
+        // Determine inherited auth - prefer group auth, then fall back to global if needed
+        AuthorizationInfo? inheritedFrom = groupAuth;
+
+        // If no explicit auth on endpoint or group, and no AllowAnonymous, inherit from global FallbackPolicy
+        if (!hasRequireAuth && !hasAllowAnonymous &&
+            (groupAuth == null || !groupAuth.IsEffectivelyAuthorized) &&
+            globalAuth.ProtectsAllEndpointsByDefault)
+        {
+            inheritedFrom = groupAuth != null
+                ? new AuthorizationInfo
+                {
+                    HasAuthorize = groupAuth.HasAuthorize,
+                    HasAllowAnonymous = groupAuth.HasAllowAnonymous,
+                    Roles = groupAuth.Roles,
+                    Policies = groupAuth.Policies,
+                    AuthenticationSchemes = groupAuth.AuthenticationSchemes,
+                    InheritedFrom = globalAuth.ToAuthorizationInfo()
+                }
+                : globalAuth.ToAuthorizationInfo();
+        }
+
         return new AuthorizationInfo
         {
             HasAuthorize = hasRequireAuth,
             HasAllowAnonymous = hasAllowAnonymous,
             Roles = roles,
             Policies = policies,
-            InheritedFrom = groupAuth
+            InheritedFrom = inheritedFrom
         };
     }
 
@@ -263,8 +288,9 @@ public sealed class MinimalApiEndpointDiscoverer : IEndpointDiscoverer
 
                 if (parentMethod == "MapGroup")
                 {
-                    // Analyze authorization on the group
-                    return AnalyzeAuthorizationChain(parentInvocation);
+                    // Analyze authorization on the group (don't inherit global auth here -
+                    // that's handled at the endpoint level)
+                    return AnalyzeGroupAuthorizationChain(parentInvocation);
                 }
 
                 current = parentInvocation.Expression;
@@ -276,5 +302,65 @@ public sealed class MinimalApiEndpointDiscoverer : IEndpointDiscoverer
         }
 
         return null;
+    }
+
+    private static AuthorizationInfo AnalyzeGroupAuthorizationChain(InvocationExpressionSyntax invocation)
+    {
+        var hasRequireAuth = false;
+        var hasAllowAnonymous = false;
+        var roles = new List<string>();
+        var policies = new List<string>();
+
+        // Walk up the fluent chain looking for auth methods
+        var current = invocation.Parent;
+        while (current != null)
+        {
+            if (current is InvocationExpressionSyntax parentInvocation)
+            {
+                var methodName = parentInvocation.Expression switch
+                {
+                    MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.Text,
+                    _ => null
+                };
+
+                switch (methodName)
+                {
+                    case "RequireAuthorization":
+                        hasRequireAuth = true;
+                        ExtractAuthorizationArgs(parentInvocation, policies, roles);
+                        break;
+
+                    case "AllowAnonymous":
+                        hasAllowAnonymous = true;
+                        break;
+
+                    case "RequireRole":
+                        hasRequireAuth = true;
+                        ExtractRolesFromCall(parentInvocation, roles);
+                        break;
+                }
+            }
+
+            if (current is MemberAccessExpressionSyntax)
+            {
+                current = current.Parent;
+            }
+            else if (current is InvocationExpressionSyntax)
+            {
+                current = current.Parent;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        return new AuthorizationInfo
+        {
+            HasAuthorize = hasRequireAuth,
+            HasAllowAnonymous = hasAllowAnonymous,
+            Roles = roles,
+            Policies = policies
+        };
     }
 }
