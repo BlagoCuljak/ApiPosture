@@ -147,6 +147,9 @@ public sealed class ExtensionMethodDiscoverer
         AuthorizationInfo parentAuth,
         GlobalAuthorizationInfo globalAuth)
     {
+        // Build map of local group variables to their routes
+        var localGroupMap = BuildLocalGroupMap(extensionMethod.MethodBody, extensionMethod.ParameterName);
+
         // Find all Map* invocations in the method body
         foreach (var invocation in extensionMethod.MethodBody.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
@@ -156,7 +159,8 @@ public sealed class ExtensionMethodDiscoverer
                 extensionMethod.ParameterName,
                 parentRoutePrefix,
                 parentAuth,
-                globalAuth);
+                globalAuth,
+                localGroupMap);
 
             if (endpoint != null)
                 yield return endpoint;
@@ -169,25 +173,35 @@ public sealed class ExtensionMethodDiscoverer
         string parameterName,
         string parentRoutePrefix,
         AuthorizationInfo parentAuth,
-        GlobalAuthorizationInfo globalAuth)
+        GlobalAuthorizationInfo globalAuth,
+        Dictionary<string, string> localGroupMap)
     {
         var (methodName, httpMethod) = GetMapMethod(invocation);
         if (methodName == null || httpMethod == HttpMethod.None)
             return null;
 
         // Verify this is called on the parameter or a group derived from it
-        if (!IsCalledOnRouteBuilder(invocation, parameterName))
+        if (!IsCalledOnRouteBuilder(invocation, parameterName, localGroupMap))
             return null;
 
         var route = GetRouteTemplate(invocation);
         if (route == null)
             return null;
 
-        // Check for nested MapGroup within the extension method
-        var nestedGroupRoute = GetNestedGroupRoutePrefix(invocation);
-        if (!string.IsNullOrEmpty(nestedGroupRoute))
+        // Check if called on a local group variable
+        var calledOnVariable = GetCalledOnVariableName(invocation);
+        if (calledOnVariable != null && localGroupMap.TryGetValue(calledOnVariable, out var localGroupRoute))
         {
-            parentRoutePrefix = CombineRoutes(parentRoutePrefix, nestedGroupRoute);
+            parentRoutePrefix = CombineRoutes(parentRoutePrefix, localGroupRoute);
+        }
+        else
+        {
+            // Existing logic for inline MapGroup
+            var nestedGroupRoute = GetNestedGroupRoutePrefix(invocation);
+            if (!string.IsNullOrEmpty(nestedGroupRoute))
+            {
+                parentRoutePrefix = CombineRoutes(parentRoutePrefix, nestedGroupRoute);
+            }
         }
 
         // Combine with parent route prefix
@@ -214,7 +228,10 @@ public sealed class ExtensionMethodDiscoverer
         };
     }
 
-    private static bool IsCalledOnRouteBuilder(InvocationExpressionSyntax invocation, string parameterName)
+    private static bool IsCalledOnRouteBuilder(
+        InvocationExpressionSyntax invocation,
+        string parameterName,
+        Dictionary<string, string> localGroupMap)
     {
         // Check if this is called on the parameter directly or through a chain
         var current = invocation.Expression;
@@ -223,10 +240,14 @@ public sealed class ExtensionMethodDiscoverer
             switch (current)
             {
                 case MemberAccessExpressionSyntax memberAccess:
-                    if (memberAccess.Expression is IdentifierNameSyntax identifier &&
-                        identifier.Identifier.Text == parameterName)
+                    if (memberAccess.Expression is IdentifierNameSyntax identifier)
                     {
-                        return true;
+                        var varName = identifier.Identifier.Text;
+                        // Check if it's the parameter or a known local group variable
+                        if (varName == parameterName || localGroupMap.ContainsKey(varName))
+                        {
+                            return true;
+                        }
                     }
                     current = memberAccess.Expression;
                     break;
@@ -330,6 +351,106 @@ public sealed class ExtensionMethodDiscoverer
             }
         }
 
+        return null;
+    }
+
+    /// <summary>
+    /// Builds a map of variable names to their MapGroup route prefixes within a method body.
+    /// </summary>
+    private static Dictionary<string, string> BuildLocalGroupMap(
+        SyntaxNode methodBody,
+        string parameterName)
+    {
+        var groupMap = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var declaration in methodBody.DescendantNodes().OfType<LocalDeclarationStatementSyntax>())
+        {
+            foreach (var variable in declaration.Declaration.Variables)
+            {
+                if (variable.Initializer?.Value is not InvocationExpressionSyntax invocation)
+                    continue;
+
+                var route = ExtractMapGroupRoute(invocation, parameterName, groupMap);
+                if (route != null)
+                {
+                    groupMap[variable.Identifier.Text] = route;
+                }
+            }
+        }
+
+        return groupMap;
+    }
+
+    /// <summary>
+    /// Extracts the route from a MapGroup invocation, handling variable chains.
+    /// </summary>
+    private static string? ExtractMapGroupRoute(
+        InvocationExpressionSyntax invocation,
+        string parameterName,
+        Dictionary<string, string> knownGroups)
+    {
+        // Walk the chain to find MapGroup
+        var current = invocation;
+        string? accumulatedRoute = null;
+
+        while (current != null)
+        {
+            var methodName = current.Expression switch
+            {
+                MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                _ => null
+            };
+
+            if (methodName == "MapGroup" && current.ArgumentList.Arguments.Count > 0)
+            {
+                var arg = current.ArgumentList.Arguments[0].Expression;
+                if (arg is LiteralExpressionSyntax literal)
+                {
+                    var route = literal.Token.ValueText;
+                    accumulatedRoute = accumulatedRoute != null
+                        ? CombineRoutes(route, accumulatedRoute)
+                        : route;
+                }
+            }
+
+            // Check what MapGroup was called on
+            var calledOn = current.Expression switch
+            {
+                MemberAccessExpressionSyntax ma => ma.Expression,
+                _ => null
+            };
+
+            // If called on a known group variable, prepend its route
+            if (calledOn is IdentifierNameSyntax identifier)
+            {
+                var varName = identifier.Identifier.Text;
+                if (varName == parameterName)
+                {
+                    return accumulatedRoute;
+                }
+                if (knownGroups.TryGetValue(varName, out var parentRoute) && accumulatedRoute != null)
+                {
+                    return CombineRoutes(parentRoute, accumulatedRoute);
+                }
+            }
+
+            // Move to inner invocation
+            current = calledOn as InvocationExpressionSyntax;
+        }
+
+        return accumulatedRoute;
+    }
+
+    /// <summary>
+    /// Gets the variable name that an invocation is called on, if any.
+    /// </summary>
+    private static string? GetCalledOnVariableName(InvocationExpressionSyntax invocation)
+    {
+        if (invocation.Expression is MemberAccessExpressionSyntax memberAccess &&
+            memberAccess.Expression is IdentifierNameSyntax identifier)
+        {
+            return identifier.Identifier.Text;
+        }
         return null;
     }
 

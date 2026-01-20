@@ -277,6 +277,96 @@ public class ExtensionMethodDiscovererTests
         endpoints.Should().HaveCount(1);
         endpoints[0].Route.Should().Be("/api/tasks");
     }
+
+    [Fact]
+    public void DiscoverEndpointsInMethod_VariableAssignedMapGroup_CombinesRoutePrefix()
+    {
+        var code = """
+            public static class TasksRoutes
+            {
+                public static void MapTasksRoutes(this IEndpointRouteBuilder root)
+                {
+                    var group = root.MapGroup("/tasks");
+                    group.MapGet("", () => Results.Ok());
+                    group.MapGet("/{id}", (int id) => Results.Ok());
+                }
+            }
+            """;
+
+        var tree = SourceFileLoader.ParseText(code);
+        var methods = _discoverer.DiscoverExtensionMethods(tree).ToList();
+
+        var endpoints = _discoverer.DiscoverEndpointsInMethod(
+            methods[0],
+            "/api/v1",
+            AuthorizationInfo.Empty,
+            GlobalAuthorizationInfo.Empty).ToList();
+
+        endpoints.Should().HaveCount(2);
+        endpoints.Should().Contain(e => e.Route == "/api/v1/tasks");
+        endpoints.Should().Contain(e => e.Route == "/api/v1/tasks/{id}");
+    }
+
+    [Fact]
+    public void DiscoverEndpointsInMethod_NestedVariableMapGroups_CombinesAllPrefixes()
+    {
+        var code = """
+            public static class UsersRoutes
+            {
+                public static void MapUsersRoutes(this IEndpointRouteBuilder root)
+                {
+                    var group = root.MapGroup("/users");
+                    var adminGroup = group.MapGroup("/admin");
+                    adminGroup.MapPost("", () => Results.Created());
+                    adminGroup.MapDelete("/{id}", (int id) => Results.NoContent());
+                }
+            }
+            """;
+
+        var tree = SourceFileLoader.ParseText(code);
+        var methods = _discoverer.DiscoverExtensionMethods(tree).ToList();
+
+        var endpoints = _discoverer.DiscoverEndpointsInMethod(
+            methods[0],
+            "/api",
+            AuthorizationInfo.Empty,
+            GlobalAuthorizationInfo.Empty).ToList();
+
+        endpoints.Should().HaveCount(2);
+        endpoints.Should().Contain(e => e.Route == "/api/users/admin");
+        endpoints.Should().Contain(e => e.Route == "/api/users/admin/{id}");
+    }
+
+    [Fact]
+    public void DiscoverEndpointsInMethod_MixedDirectAndVariableGroups_CombinesCorrectly()
+    {
+        var code = """
+            public static class MixedRoutes
+            {
+                public static void MapMixedRoutes(this IEndpointRouteBuilder root)
+                {
+                    root.MapGet("/health", () => Results.Ok());
+                    var group = root.MapGroup("/items");
+                    group.MapGet("", () => Results.Ok());
+                    root.MapGroup("/inline").MapGet("/test", () => Results.Ok());
+                }
+            }
+            """;
+
+        var tree = SourceFileLoader.ParseText(code);
+        var methods = _discoverer.DiscoverExtensionMethods(tree).ToList();
+
+        var endpoints = _discoverer.DiscoverEndpointsInMethod(
+            methods[0],
+            "/api",
+            AuthorizationInfo.Empty,
+            GlobalAuthorizationInfo.Empty).ToList();
+
+        endpoints.Should().HaveCount(3);
+        endpoints.Should().Contain(e => e.Route == "/api/health");
+        endpoints.Should().Contain(e => e.Route == "/api/items");
+        endpoints.Should().Contain(e => e.Route == "/api/inline/test");
+    }
 }
 
 public class RouteGroupRegistryTests
