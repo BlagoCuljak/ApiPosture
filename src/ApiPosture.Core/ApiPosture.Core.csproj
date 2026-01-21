@@ -4,11 +4,36 @@
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
+    <!-- NuGet Package Configuration -->
+    <PackageId>ApiPosture.Core</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>BlagoCuljak</Authors>
+    <Company>Blago Culjak</Company>
+    <Product>ApiPosture</Product>
+    <Description>Core library for ApiPosture - security analysis engine, models, and extension interfaces for ASP.NET Core API security scanning.</Description>
+    <PackageTags>security;aspnetcore;api;authorization;static-analysis;roslyn</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/BlagoCuljak/ApiPosture</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/BlagoCuljak/ApiPosture.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Copyright>Copyright (c) 2026 Blago Culjak</Copyright>
+
+    <!-- Enable packaging -->
+    <IsPackable>true</IsPackable>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+
+    <!-- Source Link for debugging -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" />
     <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" Version="9.0.0" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 
 </Project>

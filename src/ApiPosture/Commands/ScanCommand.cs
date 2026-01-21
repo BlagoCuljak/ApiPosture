@@ -8,6 +8,7 @@ using ApiPosture.Core.Models;
 using ApiPosture.Core.Sorting;
 using ApiPosture.Output;
 using ApiPosture.Rules;
+using ApiPosture.Services;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -146,10 +147,11 @@ public sealed class ScanCommand : Command<ScanCommand.Settings>
             failOnSeverity = parsedFailOn;
         }
 
-        // Build rule engine config
+        // Build rule engine config with extension rules
         var ruleEngineConfig = new RuleEngineConfig
         {
-            SensitiveKeywords = config.GetSensitiveKeywords()
+            SensitiveKeywords = config.GetSensitiveKeywords(),
+            ExtensionRules = ServiceLocator.ExtensionRules
         };
 
         // Perform scan
