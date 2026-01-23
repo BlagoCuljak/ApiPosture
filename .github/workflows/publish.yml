@@ -44,7 +44,7 @@ jobs:
         run: dotnet pack src/ApiPosture --configuration Release --no-build -p:PackageVersion=${{ steps.get_version.outputs.VERSION }} --output ./artifacts
 
       - name: Upload NuGet package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: nuget-package
           path: ./artifacts/*.nupkg
