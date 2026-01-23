@@ -16,7 +16,7 @@ public sealed class LicenseCommand : Command<LicenseCommand.Settings>
     {
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         AnsiConsole.MarkupLine("[yellow]Usage:[/] apiposture license <command>");
         AnsiConsole.WriteLine();
@@ -40,7 +40,7 @@ public sealed class LicenseActivateCommand : AsyncCommand<LicenseActivateCommand
         public required string Key { get; init; }
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var licenseManager = new Licensing.LicenseManager(ExtensionLoader.DataDirectory);
 
@@ -118,7 +118,7 @@ public sealed class LicenseDeactivateCommand : AsyncCommand<LicenseDeactivateCom
     {
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         // Confirm deactivation
         if (!AnsiConsole.Confirm("Are you sure you want to deactivate your license?", false))
@@ -158,7 +158,7 @@ public sealed class LicenseStatusCommand : AsyncCommand<LicenseStatusCommand.Set
     {
     }
 
-    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         using var licenseManager = new Licensing.LicenseManager(ExtensionLoader.DataDirectory);
 

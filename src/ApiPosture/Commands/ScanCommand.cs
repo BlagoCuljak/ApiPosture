@@ -104,7 +104,7 @@ public sealed class ScanCommand : Command<ScanCommand.Settings>
         public bool NoIcons { get; init; }
     }
 
-    public override int Execute(CommandContext context, Settings settings)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var path = settings.Path ?? Directory.GetCurrentDirectory();
 

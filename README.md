@@ -4,7 +4,7 @@
 [![NuGet Version](https://img.shields.io/nuget/v/ApiPosture?logo=nuget&label=NuGet)](https://www.nuget.org/packages/ApiPosture)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/ApiPosture?logo=nuget&label=Downloads)](https://www.nuget.org/packages/ApiPosture)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![.NET](https://img.shields.io/badge/.NET-9.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
+[![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-support-FFDD00?logo=buy-me-a-coffee&logoColor=black)](https://checkout.revolut.com/pay/525834c6-21cd-4d72-bb99-2dc27d3a0a6d)
 
 A cross-platform CLI security inspection tool for ASP.NET Core APIs. Performs static source-code analysis using Roslyn to identify authorization misconfigurations and security risks.
