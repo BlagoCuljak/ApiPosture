@@ -54,4 +54,4 @@ jobs:
           path: coverage/report
 
       - name: Run against sample project
-        run: dotnet run --project src/ApiPosture -- scan samples/SampleWebApi --output json
+        run: dotnet run --project src/ApiPosture --framework net10.0 -- scan samples/SampleWebApi --output json
