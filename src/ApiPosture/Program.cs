@@ -17,7 +17,7 @@ foreach (var error in loadResult.Errors)
     }
     else
     {
-        AnsiConsole.MarkupLine($"[yellow]Warning:[/] {error.Message}");
+        AnsiConsole.MarkupLine($"[yellow]Warning:[/] {Markup.Escape(error.Message)}");
     }
 }
 

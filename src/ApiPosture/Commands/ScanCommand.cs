@@ -110,7 +110,7 @@ public sealed class ScanCommand : Command<ScanCommand.Settings>
 
         if (!Directory.Exists(path) && !File.Exists(path))
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Path not found: {path}");
+            AnsiConsole.MarkupLine($"[red]Error:[/] Path not found: {Markup.Escape(path)}");
             return 1;
         }
 
@@ -131,7 +131,7 @@ public sealed class ScanCommand : Command<ScanCommand.Settings>
 
         if (!TryParseSeverity(severityString, out var minSeverity))
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] Invalid severity: {severityString}");
+            AnsiConsole.MarkupLine($"[red]Error:[/] Invalid severity: {Markup.Escape(severityString)}");
             return 1;
         }
 
@@ -141,7 +141,7 @@ public sealed class ScanCommand : Command<ScanCommand.Settings>
         {
             if (!TryParseSeverity(failOnString, out var parsedFailOn))
             {
-                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid fail-on severity: {failOnString}");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Invalid fail-on severity: {Markup.Escape(failOnString)}");
                 return 1;
             }
             failOnSeverity = parsedFailOn;
@@ -232,7 +232,7 @@ public sealed class ScanCommand : Command<ScanCommand.Settings>
                 break;
 
             default:
-                AnsiConsole.MarkupLine($"[red]Error:[/] Unknown output format: {output}");
+                AnsiConsole.MarkupLine($"[red]Error:[/] Unknown output format: {Markup.Escape(output)}");
                 return 1;
         }
 
@@ -242,7 +242,7 @@ public sealed class ScanCommand : Command<ScanCommand.Settings>
             if (!string.IsNullOrEmpty(settings.OutputFile))
             {
                 File.WriteAllText(settings.OutputFile, formattedOutput);
-                AnsiConsole.MarkupLine($"[green]Report written to:[/] {settings.OutputFile}");
+                AnsiConsole.MarkupLine($"[green]Report written to:[/] {Markup.Escape(settings.OutputFile)}");
             }
             else
             {

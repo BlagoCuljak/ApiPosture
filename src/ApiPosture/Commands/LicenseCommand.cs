@@ -53,7 +53,7 @@ public sealed class LicenseActivateCommand : AsyncCommand<LicenseActivateCommand
 
         if (result.Success)
         {
-            AnsiConsole.MarkupLine($"[green]Success:[/] {result.Message}");
+            AnsiConsole.MarkupLine($"[green]Success:[/] {Markup.Escape(result.Message ?? string.Empty)}");
             AnsiConsole.WriteLine();
 
             if (result.License != null)
@@ -65,7 +65,7 @@ public sealed class LicenseActivateCommand : AsyncCommand<LicenseActivateCommand
         }
         else
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {result.ErrorMessage}");
+            AnsiConsole.MarkupLine($"[red]Error:[/] {Markup.Escape(result.ErrorMessage ?? string.Empty)}");
             return 1;
         }
     }
@@ -138,12 +138,12 @@ public sealed class LicenseDeactivateCommand : AsyncCommand<LicenseDeactivateCom
 
         if (result.Success)
         {
-            AnsiConsole.MarkupLine($"[green]Success:[/] {result.Message}");
+            AnsiConsole.MarkupLine($"[green]Success:[/] {Markup.Escape(result.Message ?? string.Empty)}");
             return 0;
         }
         else
         {
-            AnsiConsole.MarkupLine($"[red]Error:[/] {result.ErrorMessage}");
+            AnsiConsole.MarkupLine($"[red]Error:[/] {Markup.Escape(result.ErrorMessage ?? string.Empty)}");
             return 1;
         }
     }
