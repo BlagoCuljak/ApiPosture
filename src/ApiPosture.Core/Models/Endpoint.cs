@@ -46,6 +46,12 @@ public sealed class Endpoint
     public required SecurityClassification Classification { get; init; }
 
     /// <summary>
+    /// Source code of the endpoint's method body, if available.
+    /// Populated by enrichment phases after endpoint discovery.
+    /// </summary>
+    public string? MethodBody { get; set; }
+
+    /// <summary>
     /// Gets a display name for this endpoint.
     /// </summary>
     public string DisplayName => Type == EndpointType.Controller
