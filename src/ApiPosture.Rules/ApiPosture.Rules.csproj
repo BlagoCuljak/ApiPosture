@@ -4,6 +4,20 @@
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
+    <!-- NuGet Package Metadata -->
+    <PackageId>ApiPosture.Rules</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>BlagoCuljak</Authors>
+    <Company>Blago Culjak</Company>
+    <Product>ApiPosture</Product>
+    <Description>Security rules library for ApiPosture. Includes core security rules (AP001-AP008) for ASP.NET Core API analysis: authorization checks, privilege escalation detection, sensitive route patterns, and more.</Description>
+    <PackageTags>security;aspnetcore;api;authorization;rules;static-analysis</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/BlagoCuljak/ApiPosture</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/BlagoCuljak/ApiPosture.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Copyright>Copyright (c) 2026 Blago Culjak</Copyright>
   </PropertyGroup>
 
   <ItemGroup>

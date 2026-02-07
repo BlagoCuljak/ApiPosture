@@ -46,6 +46,9 @@ jobs:
       - name: Pack ApiPosture.Core library
         run: dotnet pack src/ApiPosture.Core --configuration Release --no-build -p:PackageVersion=${{ steps.get_version.outputs.VERSION }} --output ./artifacts
 
+      - name: Pack ApiPosture.Rules library
+        run: dotnet pack src/ApiPosture.Rules --configuration Release --no-build -p:PackageVersion=${{ steps.get_version.outputs.VERSION }} --output ./artifacts
+
       - name: Upload NuGet packages artifact
         uses: actions/upload-artifact@v6
         with:
@@ -65,6 +68,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **[ApiPosture](https://www.nuget.org/packages/ApiPosture/${{ steps.get_version.outputs.VERSION }})** - CLI Tool" >> $GITHUB_STEP_SUMMARY
           echo "- **[ApiPosture.Core](https://www.nuget.org/packages/ApiPosture.Core/${{ steps.get_version.outputs.VERSION }})** - Core Library" >> $GITHUB_STEP_SUMMARY
+          echo "- **[ApiPosture.Rules](https://www.nuget.org/packages/ApiPosture.Rules/${{ steps.get_version.outputs.VERSION }})** - Rules Library" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Install CLI Tool" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
