@@ -40,13 +40,16 @@ jobs:
       - name: Run tests
         run: dotnet test --configuration Release --no-build --verbosity normal
 
-      - name: Pack NuGet package
+      - name: Pack ApiPosture CLI tool
         run: dotnet pack src/ApiPosture --configuration Release --no-build -p:PackageVersion=${{ steps.get_version.outputs.VERSION }} --output ./artifacts
 
-      - name: Upload NuGet package artifact
+      - name: Pack ApiPosture.Core library
+        run: dotnet pack src/ApiPosture.Core --configuration Release --no-build -p:PackageVersion=${{ steps.get_version.outputs.VERSION }} --output ./artifacts
+
+      - name: Upload NuGet packages artifact
         uses: actions/upload-artifact@v6
         with:
-          name: nuget-package
+          name: nuget-packages
           path: ./artifacts/*.nupkg
 
       - name: Publish to NuGet
@@ -58,9 +61,17 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** ${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Package:** [ApiPosture on NuGet](https://www.nuget.org/packages/ApiPosture/${{ steps.get_version.outputs.VERSION }})" >> $GITHUB_STEP_SUMMARY
+          echo "### Packages Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Install" >> $GITHUB_STEP_SUMMARY
+          echo "- **[ApiPosture](https://www.nuget.org/packages/ApiPosture/${{ steps.get_version.outputs.VERSION }})** - CLI Tool" >> $GITHUB_STEP_SUMMARY
+          echo "- **[ApiPosture.Core](https://www.nuget.org/packages/ApiPosture.Core/${{ steps.get_version.outputs.VERSION }})** - Core Library" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Install CLI Tool" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo "dotnet tool install --global ApiPosture --version ${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Reference Core Library" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "dotnet add package ApiPosture.Core --version ${{ steps.get_version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
