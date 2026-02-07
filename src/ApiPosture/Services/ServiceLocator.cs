@@ -96,10 +96,8 @@ public static class ServiceLocator
     {
         if (_initialized) return;
 
-        var dataDirectory = Extensions.ExtensionLoader.DataDirectory;
-
-        // Initialize license manager
-        _licenseManager = new LicenseManager(dataDirectory);
+        // Initialize license manager (simplified - only reads environment variable)
+        _licenseManager = new LicenseManager();
         _licenseContext = _licenseManager.GetLicenseContext();
 
         // Initialize extension loader

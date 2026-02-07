@@ -37,22 +37,6 @@ app.Configure(config =>
         .WithExample("scan", ".", "--output", "markdown", "--output-file", "report.md")
         .WithExample("scan", ".", "--fail-on", "high");
 
-    // License management commands
-    config.AddBranch("license", license =>
-    {
-        license.SetDescription("Manage ApiPosture Pro license");
-
-        license.AddCommand<LicenseActivateCommand>("activate")
-            .WithDescription("Activate a license key")
-            .WithExample("license", "activate", "XXXX-XXXX-XXXX-XXXX");
-
-        license.AddCommand<LicenseDeactivateCommand>("deactivate")
-            .WithDescription("Deactivate the current license");
-
-        license.AddCommand<LicenseStatusCommand>("status")
-            .WithDescription("Show current license status");
-    });
-
     // Note: Extension commands are registered through the extension system.
     // Commands from extensions are registered at startup when extensions are loaded.
     // Due to Spectre.Console.Cli's design, dynamic command registration requires
