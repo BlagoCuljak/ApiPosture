@@ -176,6 +176,41 @@ public class GlobalAuthorizationAnalyzerTests
     }
 
     [Fact]
+    public void Analyze_WithSetFallbackPolicy_DetectsFallbackPolicy()
+    {
+        var code = """
+            builder.Services.AddAuthorizationBuilder()
+                .SetFallbackPolicy(new AuthorizationPolicyBuilder()
+                    .RequireAuthenticatedUser()
+                    .Build());
+            """;
+
+        var tree = SourceFileLoader.ParseText(code);
+        var result = _analyzer.Analyze([tree]);
+
+        result.HasFallbackPolicy.Should().BeTrue();
+        result.FallbackRequiresAuthentication.Should().BeTrue();
+        result.ProtectsAllEndpointsByDefault.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Analyze_WithSetDefaultPolicy_DetectsDefaultPolicy()
+    {
+        var code = """
+            builder.Services.AddAuthorizationBuilder()
+                .SetDefaultPolicy(new AuthorizationPolicyBuilder()
+                    .RequireAuthenticatedUser()
+                    .Build());
+            """;
+
+        var tree = SourceFileLoader.ParseText(code);
+        var result = _analyzer.Analyze([tree]);
+
+        result.HasDefaultPolicy.Should().BeTrue();
+        result.HasFallbackPolicy.Should().BeFalse();
+    }
+
+    [Fact]
     public void Analyze_WithCombinedPolicyRequirements_DetectsAll()
     {
         var code = """

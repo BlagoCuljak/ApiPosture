@@ -56,6 +56,28 @@ public sealed class GlobalAuthorizationAnalyzer
                         fallbackRoles, fallbackClaims, ref hasDefaultPolicy);
                 }
             }
+
+            // Detect AuthorizationBuilder.SetFallbackPolicy/SetDefaultPolicy patterns
+            foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                var methodName = GetInvocationMethodName(invocation);
+                if (methodName is "SetFallbackPolicy" or "SetDefaultPolicy")
+                {
+                    if (methodName == "SetFallbackPolicy")
+                    {
+                        hasFallbackPolicy = true;
+                        if (invocation.ArgumentList.Arguments.Count > 0)
+                        {
+                            AnalyzePolicyBuilder(invocation.ArgumentList.Arguments[0].Expression,
+                                ref fallbackRequiresAuth, fallbackRoles, fallbackClaims);
+                        }
+                    }
+                    else if (methodName == "SetDefaultPolicy")
+                    {
+                        hasDefaultPolicy = true;
+                    }
+                }
+            }
         }
 
         return new GlobalAuthorizationInfo
@@ -70,14 +92,19 @@ public sealed class GlobalAuthorizationAnalyzer
 
     private static bool IsAddAuthorizationCall(InvocationExpressionSyntax invocation)
     {
-        var methodName = invocation.Expression switch
+        var methodName = GetInvocationMethodName(invocation);
+
+        return methodName == "AddAuthorization";
+    }
+
+    private static string? GetInvocationMethodName(InvocationExpressionSyntax invocation)
+    {
+        return invocation.Expression switch
         {
             MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.Text,
             IdentifierNameSyntax identifier => identifier.Identifier.Text,
             _ => null
         };
-
-        return methodName == "AddAuthorization";
     }
 
     private void AnalyzeLambdaBody(
