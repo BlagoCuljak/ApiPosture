@@ -20,6 +20,13 @@ public static class AnonymousWriteClassifier
             route.Contains("/callback") || route.Contains("/notify"))
             return (Severity.Medium, "Webhook endpoints require signature validation instead of authentication.");
 
+        // Authentication endpoints - must be public by design
+        if (route.Contains("/auth/login") || route.Contains("/auth/register") ||
+            route.Contains("/auth/refresh") || route.Contains("/auth/revoke") ||
+            route.Contains("/signin") || route.Contains("/signup") ||
+            route.Contains("/token"))
+            return (Severity.Low, "Authentication endpoints are intentionally public. Ensure rate limiting and account lockout are implemented.");
+
         // Counter/analytics endpoints - low risk, intentionally public
         if (route.Contains("increment") || route.Contains("/count") ||
             route.Contains("/view") || route.Contains("/track") || route.Contains("/analytics"))

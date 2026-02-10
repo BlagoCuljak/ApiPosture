@@ -116,6 +116,63 @@ public class MissingAuthOnWritesRuleTests
         finding!.Severity.Should().Be(Severity.Medium);
     }
 
+    [Fact]
+    public void Evaluate_AuthLoginEndpoint_ReturnsMediumSeverity()
+    {
+        var endpoint = CreateEndpoint(
+            "/api/Auth/login",
+            methods: HttpMethod.Post,
+            classification: SecurityClassification.Public);
+
+        var finding = _rule.Evaluate(endpoint);
+
+        finding.Should().NotBeNull();
+        finding!.Severity.Should().Be(Severity.Medium);
+        finding.Message.Should().Contain("rate limiting");
+    }
+
+    [Fact]
+    public void Evaluate_AuthRegisterEndpoint_ReturnsMediumSeverity()
+    {
+        var endpoint = CreateEndpoint(
+            "/api/Auth/register",
+            methods: HttpMethod.Post,
+            classification: SecurityClassification.Public);
+
+        var finding = _rule.Evaluate(endpoint);
+
+        finding.Should().NotBeNull();
+        finding!.Severity.Should().Be(Severity.Medium);
+    }
+
+    [Fact]
+    public void Evaluate_AuthRefreshTokenEndpoint_ReturnsMediumSeverity()
+    {
+        var endpoint = CreateEndpoint(
+            "/api/Auth/refresh-token",
+            methods: HttpMethod.Post,
+            classification: SecurityClassification.Public);
+
+        var finding = _rule.Evaluate(endpoint);
+
+        finding.Should().NotBeNull();
+        finding!.Severity.Should().Be(Severity.Medium);
+    }
+
+    [Fact]
+    public void Evaluate_RegularPostWithoutAuth_ReturnsCriticalSeverity()
+    {
+        var endpoint = CreateEndpoint(
+            "/api/users",
+            methods: HttpMethod.Post,
+            classification: SecurityClassification.Public);
+
+        var finding = _rule.Evaluate(endpoint);
+
+        finding.Should().NotBeNull();
+        finding!.Severity.Should().Be(Severity.Critical);
+    }
+
     private static Endpoint CreateEndpoint(
         HttpMethod methods,
         bool hasAuthorize = false,
