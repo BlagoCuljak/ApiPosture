@@ -62,8 +62,9 @@ public sealed class SensitiveRouteKeywordsRule : ISecurityRule
             return null;
 
         var route = endpoint.Route.ToLowerInvariant();
+        var segments = route.Split('/');
         var foundKeywords = _sensitiveKeywords
-            .Where(keyword => route.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            .Where(keyword => segments.Any(s => s.Equals(keyword, StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
         if (foundKeywords.Count == 0)

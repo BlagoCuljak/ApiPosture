@@ -16,9 +16,9 @@ public class PublicWithoutExplicitIntentRuleTests
     }
 
     [Fact]
-    public void DefaultSeverity_IsHigh()
+    public void DefaultSeverity_IsLow()
     {
-        _rule.DefaultSeverity.Should().Be(Severity.High);
+        _rule.DefaultSeverity.Should().Be(Severity.Low);
     }
 
     [Fact]

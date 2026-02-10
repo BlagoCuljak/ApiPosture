@@ -18,7 +18,7 @@ public class AllowAnonymousOnWriteRuleTests
     [Fact]
     public void Evaluate_AllowAnonymousOnPost_ReturnsFinding()
     {
-        var endpoint = CreateEndpoint(HttpMethod.Post, hasAllowAnonymous: true);
+        var endpoint = CreateEndpoint("/api/test", HttpMethod.Post, hasAllowAnonymous: true);
 
         var finding = _rule.Evaluate(endpoint);
 
@@ -29,7 +29,7 @@ public class AllowAnonymousOnWriteRuleTests
     [Fact]
     public void Evaluate_AllowAnonymousOnPut_ReturnsFinding()
     {
-        var endpoint = CreateEndpoint(HttpMethod.Put, hasAllowAnonymous: true);
+        var endpoint = CreateEndpoint("/api/test", HttpMethod.Put, hasAllowAnonymous: true);
 
         var finding = _rule.Evaluate(endpoint);
 
@@ -39,7 +39,7 @@ public class AllowAnonymousOnWriteRuleTests
     [Fact]
     public void Evaluate_AllowAnonymousOnDelete_ReturnsFinding()
     {
-        var endpoint = CreateEndpoint(HttpMethod.Delete, hasAllowAnonymous: true);
+        var endpoint = CreateEndpoint("/api/test", HttpMethod.Delete, hasAllowAnonymous: true);
 
         var finding = _rule.Evaluate(endpoint);
 
@@ -49,7 +49,7 @@ public class AllowAnonymousOnWriteRuleTests
     [Fact]
     public void Evaluate_AllowAnonymousOnGet_ReturnsNull()
     {
-        var endpoint = CreateEndpoint(HttpMethod.Get, hasAllowAnonymous: true);
+        var endpoint = CreateEndpoint("/api/test", HttpMethod.Get, hasAllowAnonymous: true);
 
         var finding = _rule.Evaluate(endpoint);
 
@@ -59,18 +59,64 @@ public class AllowAnonymousOnWriteRuleTests
     [Fact]
     public void Evaluate_PostWithoutAllowAnonymous_ReturnsNull()
     {
-        var endpoint = CreateEndpoint(HttpMethod.Post, hasAllowAnonymous: false);
+        var endpoint = CreateEndpoint("/api/test", HttpMethod.Post, hasAllowAnonymous: false);
 
         var finding = _rule.Evaluate(endpoint);
 
         finding.Should().BeNull();
     }
 
-    private static Endpoint CreateEndpoint(HttpMethod method, bool hasAllowAnonymous)
+    [Fact]
+    public void Evaluate_WebhookEndpoint_ReturnsMediumSeverity()
+    {
+        var endpoint = CreateEndpoint("/api/payments/webhook/stripe", HttpMethod.Post, hasAllowAnonymous: true);
+
+        var finding = _rule.Evaluate(endpoint);
+
+        finding.Should().NotBeNull();
+        finding!.Severity.Should().Be(Severity.Medium);
+        finding.Message.Should().Contain("signature validation");
+    }
+
+    [Fact]
+    public void Evaluate_ViewCounterEndpoint_ReturnsLowSeverity()
+    {
+        var endpoint = CreateEndpoint("/api/prayers/{id}/increment-view", HttpMethod.Post, hasAllowAnonymous: true);
+
+        var finding = _rule.Evaluate(endpoint);
+
+        finding.Should().NotBeNull();
+        finding!.Severity.Should().Be(Severity.Low);
+        finding.Message.Should().Contain("rate limiting");
+    }
+
+    [Fact]
+    public void Evaluate_TokenRegistrationEndpoint_ReturnsMediumSeverity()
+    {
+        var endpoint = CreateEndpoint("/api/push/register-token", HttpMethod.Post, hasAllowAnonymous: true);
+
+        var finding = _rule.Evaluate(endpoint);
+
+        finding.Should().NotBeNull();
+        finding!.Severity.Should().Be(Severity.Medium);
+    }
+
+    [Fact]
+    public void Evaluate_RegularWriteEndpoint_ReturnsHighSeverity()
+    {
+        var endpoint = CreateEndpoint("/api/users/{id}", HttpMethod.Post, hasAllowAnonymous: true);
+
+        var finding = _rule.Evaluate(endpoint);
+
+        finding.Should().NotBeNull();
+        finding!.Severity.Should().Be(Severity.High);
+    }
+
+    private static Endpoint CreateEndpoint(string route, HttpMethod method, bool hasAllowAnonymous)
     {
         return new Endpoint
         {
-            Route = "/api/test",
+            Route = route,
             Methods = method,
             Type = EndpointType.Controller,
             Location = new SourceLocation("test.cs", 1),

@@ -59,6 +59,29 @@ public class SensitiveRouteKeywordsRuleTests
         finding.Should().BeNull();
     }
 
+    [Fact]
+    public void Evaluate_SubstringKeyword_ReturnsNull()
+    {
+        // "settings" is a substring of "PublicModuleSettings", not a standalone segment
+        var endpoint = CreateEndpoint("/api/PublicModuleSettings/{moduleKey}", SecurityClassification.Public);
+
+        var finding = _rule.Evaluate(endpoint);
+
+        finding.Should().BeNull();
+    }
+
+    [Fact]
+    public void Evaluate_SegmentKeyword_ReturnsFinding()
+    {
+        // "config" is a standalone segment
+        var endpoint = CreateEndpoint("/api/config/theme", SecurityClassification.Public);
+
+        var finding = _rule.Evaluate(endpoint);
+
+        finding.Should().NotBeNull();
+        finding!.Message.Should().Contain("config");
+    }
+
     private static Endpoint CreateEndpoint(string route, SecurityClassification classification)
     {
         return new Endpoint

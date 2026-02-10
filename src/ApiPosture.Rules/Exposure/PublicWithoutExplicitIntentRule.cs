@@ -9,7 +9,7 @@ public sealed class PublicWithoutExplicitIntentRule : ISecurityRule
 {
     public string RuleId => "AP001";
     public string Name => "Public without explicit intent";
-    public Severity DefaultSeverity => Severity.High;
+    public Severity DefaultSeverity => Severity.Low;
 
     public Finding? Evaluate(Endpoint endpoint)
     {

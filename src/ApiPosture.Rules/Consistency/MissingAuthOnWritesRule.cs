@@ -30,14 +30,15 @@ public sealed class MissingAuthOnWritesRule : ISecurityRule
             return null;
 
         var methods = GetWriteMethodsDisplay(endpoint.Methods);
+        var (severity, context) = AnonymousWriteClassifier.CategorizeForMissingAuth(endpoint);
 
         return new Finding
         {
             RuleId = RuleId,
             RuleName = Name,
-            Severity = DefaultSeverity,
+            Severity = severity,
             Endpoint = endpoint,
-            Message = $"Endpoint '{endpoint.Route}' allows {methods} without any authorization.",
+            Message = $"Endpoint '{endpoint.Route}' allows {methods} without any authorization. {context}",
             Recommendation = "Add [Authorize] attribute to require authentication, or add [AllowAnonymous] " +
                            "to explicitly document that public write access is intentional."
         };

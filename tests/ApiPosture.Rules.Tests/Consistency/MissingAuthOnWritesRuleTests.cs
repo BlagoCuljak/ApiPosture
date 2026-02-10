@@ -88,7 +88,45 @@ public class MissingAuthOnWritesRuleTests
         finding.Should().BeNull();
     }
 
+    [Fact]
+    public void Evaluate_WebhookEndpoint_ReturnsHighSeverity()
+    {
+        var endpoint = CreateEndpoint(
+            "/api/payments/webhook/stripe",
+            methods: HttpMethod.Post,
+            classification: SecurityClassification.Public);
+
+        var finding = _rule.Evaluate(endpoint);
+
+        finding.Should().NotBeNull();
+        finding!.Severity.Should().Be(Severity.High);
+    }
+
+    [Fact]
+    public void Evaluate_ViewCounterEndpoint_ReturnsMediumSeverity()
+    {
+        var endpoint = CreateEndpoint(
+            "/api/prayers/{id}/increment-view",
+            methods: HttpMethod.Post,
+            classification: SecurityClassification.Public);
+
+        var finding = _rule.Evaluate(endpoint);
+
+        finding.Should().NotBeNull();
+        finding!.Severity.Should().Be(Severity.Medium);
+    }
+
     private static Endpoint CreateEndpoint(
+        HttpMethod methods,
+        bool hasAuthorize = false,
+        bool hasAllowAnonymous = false,
+        SecurityClassification classification = SecurityClassification.Public)
+    {
+        return CreateEndpoint("/api/test", methods, hasAuthorize, hasAllowAnonymous, classification);
+    }
+
+    private static Endpoint CreateEndpoint(
+        string route,
         HttpMethod methods,
         bool hasAuthorize = false,
         bool hasAllowAnonymous = false,
@@ -96,7 +134,7 @@ public class MissingAuthOnWritesRuleTests
     {
         return new Endpoint
         {
-            Route = "/api/test",
+            Route = route,
             Methods = methods,
             Type = EndpointType.Controller,
             Location = new SourceLocation("test.cs", 1),

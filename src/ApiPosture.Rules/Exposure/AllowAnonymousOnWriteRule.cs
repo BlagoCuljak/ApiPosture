@@ -26,14 +26,15 @@ public sealed class AllowAnonymousOnWriteRule : ISecurityRule
             return null;
 
         var methods = GetWriteMethodsDisplay(endpoint.Methods);
+        var (severity, context) = AnonymousWriteClassifier.CategorizeAnonymousWrite(endpoint);
 
         return new Finding
         {
             RuleId = RuleId,
             RuleName = Name,
-            Severity = DefaultSeverity,
+            Severity = severity,
             Endpoint = endpoint,
-            Message = $"Endpoint '{endpoint.Route}' allows anonymous access to write operations ({methods}).",
+            Message = $"Endpoint '{endpoint.Route}' allows anonymous access to write operations ({methods}). {context}",
             Recommendation = "Reconsider allowing anonymous access to write operations. " +
                            "If intentional, ensure proper rate limiting, validation, and CSRF protection."
         };
