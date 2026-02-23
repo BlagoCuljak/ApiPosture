@@ -29,22 +29,29 @@ public sealed class AuthorizationAttributeAnalyzer : IAuthorizationAttributeAnal
 
     private string GetCacheKey(string attributeName, string sourceFilePath)
     {
-        // Use project root as part of cache key to handle same attribute names in different projects
-        var projectRoot = FindProjectRoot(sourceFilePath) ?? sourceFilePath;
-        return $"{attributeName}:{projectRoot}";
+        // Use solution root (or project root) as part of cache key
+        var root = FindSolutionRoot(sourceFilePath) ?? FindProjectRoot(sourceFilePath) ?? sourceFilePath;
+        return $"{attributeName}:{root}";
     }
 
     private bool AnalyzeAttributeImplementation(string attributeName, string sourceFilePath)
     {
         try
         {
-            // Find project root
+            // Find search root - prefer solution root for cross-project attribute discovery,
+            // fall back to project root
             var projectRoot = FindProjectRoot(sourceFilePath);
-            if (projectRoot == null) return false;
+            var searchRoot = FindSolutionRoot(sourceFilePath) ?? projectRoot;
+            if (searchRoot == null) return false;
 
-            // Search for attribute class definition
-            var attributeFile = FindAttributeClassFile(attributeName, projectRoot);
-            if (attributeFile == null) return false;
+            // Search for attribute class definition across the entire solution
+            var attributeFile = FindAttributeClassFile(attributeName, searchRoot);
+            if (attributeFile == null)
+            {
+                // Fallback: use naming convention heuristics when source isn't available
+                // (e.g., attribute defined in NuGet package or external assembly)
+                return IsAuthorizationByNamingConvention(attributeName);
+            }
 
             // Parse with Roslyn
             var sourceCode = File.ReadAllText(attributeFile);
@@ -70,7 +77,7 @@ public sealed class AuthorizationAttributeAnalyzer : IAuthorizationAttributeAnal
                 var filterType = ExtractFilterType(classDecl);
                 if (filterType != null)
                 {
-                    return AnalyzeFilterType(filterType, projectRoot);
+                    return AnalyzeFilterType(filterType, searchRoot);
                 }
             }
 
@@ -193,6 +200,69 @@ public sealed class AuthorizationAttributeAnalyzer : IAuthorizationAttributeAnal
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// Checks if an attribute name matches common authorization naming conventions.
+    /// Used as a fallback when the attribute source code cannot be found (e.g., NuGet packages,
+    /// external assemblies, or attributes in projects outside the solution).
+    /// </summary>
+    private static bool IsAuthorizationByNamingConvention(string attributeName)
+    {
+        var name = attributeName;
+
+        // Exact matches for well-known custom auth attribute names
+        var knownAuthAttributes = new[]
+        {
+            "ApiKey", "ServiceFilter", "TypeFilter",
+            "RequireHttps", "RequiresClaim", "RequiresRole",
+        };
+
+        if (knownAuthAttributes.Any(a => name.Equals(a, StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        // Naming patterns that strongly indicate authorization purpose
+        // Matches: "ApiKeyAuth", "JwtAuthorize", "TokenAuthentication", "CustomAuthorizationFilter"
+        var authPatterns = new[]
+        {
+            "Auth",     // Covers Authorize, Authorization, Authenticated, CustomAuth, etc.
+            "ApiKey",   // Covers ApiKeyRequired, ApiKeyValidation, etc.
+            "Token",    // Covers TokenValidation, BearerToken, etc.
+            "Jwt",      // Covers JwtBearer, JwtAuth, etc.
+            "Bearer",   // Covers BearerAuth, etc.
+            "OAuth",    // Covers OAuth2, OAuthBearer, etc.
+            "Oidc",     // Covers OidcAuth, etc.
+            "Permission", // Covers RequirePermission, HasPermission, etc.
+            "Hmac",     // Covers HmacAuth, HmacSignature, etc.
+        };
+
+        return authPatterns.Any(p =>
+            name.Contains(p, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Finds the solution root directory by searching upward for a .sln file.
+    /// This enables cross-project attribute discovery within a solution.
+    /// </summary>
+    private string? FindSolutionRoot(string sourceFilePath)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(sourceFilePath);
+            while (directory != null)
+            {
+                if (Directory.GetFiles(directory, "*.sln").Length > 0)
+                    return directory;
+
+                directory = Path.GetDirectoryName(directory);
+            }
+        }
+        catch
+        {
+            // Return null if we can't determine solution root
+        }
+
+        return null;
     }
 
     private string? FindProjectRoot(string sourceFilePath)

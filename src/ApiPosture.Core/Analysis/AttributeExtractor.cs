@@ -35,7 +35,9 @@ public static class AttributeExtractor
                 // Find controller class
                 var classDecl = root.DescendantNodes()
                     .OfType<ClassDeclarationSyntax>()
-                    .FirstOrDefault(c => c.Identifier.Text == endpoint.ControllerName);
+                    .FirstOrDefault(c =>
+                        c.Identifier.Text == endpoint.ControllerName ||
+                        c.Identifier.Text == $"{endpoint.ControllerName}Controller");
 
                 if (classDecl != null)
                 {
