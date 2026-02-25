@@ -63,6 +63,15 @@ public sealed class MinimalApiEndpointDiscoverer : IEndpointDiscoverer
 
         // Analyze the fluent chain for authorization
         var auth = AnalyzeAuthorizationChain(invocation, globalAuth);
+
+        // Also check for [Authorize] attributes on lambda delegates (C# 10+ pattern used by eShopOnWeb)
+        if (!auth.IsEffectivelyAuthorized && !auth.HasAllowAnonymous)
+        {
+            var lambdaAuth = CheckLambdaAttributes(invocation);
+            if (lambdaAuth != null)
+                auth = lambdaAuth;
+        }
+
         var classification = _classifier.Classify(auth);
 
         var location = invocation.GetLocation();
@@ -358,6 +367,75 @@ public sealed class MinimalApiEndpointDiscoverer : IEndpointDiscoverer
         return new AuthorizationInfo
         {
             HasAuthorize = hasRequireAuth,
+            HasAllowAnonymous = hasAllowAnonymous,
+            Roles = roles,
+            Policies = policies
+        };
+    }
+
+    /// <summary>
+    /// Checks if any lambda argument to a Map* invocation has an [Authorize] attribute.
+    /// Handles the C# 10+ pattern: app.MapDelete("route", [Authorize] async (args) => { })
+    /// </summary>
+    private static AuthorizationInfo? CheckLambdaAttributes(InvocationExpressionSyntax invocation)
+    {
+        var hasAuthorize = false;
+        var hasAllowAnonymous = false;
+        var roles = new List<string>();
+        var policies = new List<string>();
+
+        foreach (var argument in invocation.ArgumentList.Arguments)
+        {
+            // Lambda expressions can carry attribute lists in C# 10+
+            // Only ParenthesizedLambdaExpressionSyntax supports AttributeLists;
+            // AnonymousMethodExpressionSyntax does not (C# delegate syntax)
+            SyntaxList<AttributeListSyntax> attrLists = default;
+
+            if (argument.Expression is ParenthesizedLambdaExpressionSyntax lambda)
+                attrLists = lambda.AttributeLists;
+
+            foreach (var attrList in attrLists)
+            {
+                foreach (var attr in attrList.Attributes)
+                {
+                    var name = attr.Name.ToString();
+                    if (name.Equals("Authorize", StringComparison.OrdinalIgnoreCase) ||
+                        name.EndsWith(".Authorize", StringComparison.OrdinalIgnoreCase))
+                    {
+                        hasAuthorize = true;
+
+                        // Extract roles and policies from attribute arguments
+                        if (attr.ArgumentList != null)
+                        {
+                            foreach (var arg in attr.ArgumentList.Arguments)
+                            {
+                                var argName = arg.NameEquals?.Name.Identifier.Text;
+                                var argValue = arg.Expression is LiteralExpressionSyntax lit
+                                    ? lit.Token.ValueText
+                                    : arg.Expression.ToString();
+
+                                if (argName == "Roles")
+                                    roles.Add(argValue);
+                                else if (argName == "Policy")
+                                    policies.Add(argValue);
+                            }
+                        }
+                    }
+                    else if (name.Equals("AllowAnonymous", StringComparison.OrdinalIgnoreCase) ||
+                             name.EndsWith(".AllowAnonymous", StringComparison.OrdinalIgnoreCase))
+                    {
+                        hasAllowAnonymous = true;
+                    }
+                }
+            }
+        }
+
+        if (!hasAuthorize && !hasAllowAnonymous)
+            return null;
+
+        return new AuthorizationInfo
+        {
+            HasAuthorize = hasAuthorize,
             HasAllowAnonymous = hasAllowAnonymous,
             Roles = roles,
             Policies = policies
