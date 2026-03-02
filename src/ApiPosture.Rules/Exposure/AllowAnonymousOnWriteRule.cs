@@ -17,8 +17,8 @@ public sealed class AllowAnonymousOnWriteRule : ISecurityRule
 
     public Finding? Evaluate(Endpoint endpoint)
     {
-        // Only check endpoints with explicit AllowAnonymous
-        if (!endpoint.Authorization.HasAllowAnonymous)
+        // Only check endpoints with AllowAnonymous (directly or inherited from controller)
+        if (!endpoint.Authorization.IsEffectivelyAllowAnonymous)
             return null;
 
         // Check if any write methods are allowed

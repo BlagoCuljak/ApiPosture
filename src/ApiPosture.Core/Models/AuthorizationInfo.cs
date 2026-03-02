@@ -42,10 +42,16 @@ public sealed class AuthorizationInfo
         HasAuthorize || (InheritedFrom?.IsEffectivelyAuthorized ?? false);
 
     /// <summary>
+    /// Gets whether AllowAnonymous is set directly or inherited from the controller/group.
+    /// </summary>
+    public bool IsEffectivelyAllowAnonymous =>
+        HasAllowAnonymous || (InheritedFrom?.IsEffectivelyAllowAnonymous ?? false);
+
+    /// <summary>
     /// Gets whether the endpoint is effectively public (AllowAnonymous overrides Authorize).
     /// </summary>
     public bool IsEffectivelyPublic =>
-        HasAllowAnonymous || (!IsEffectivelyAuthorized);
+        IsEffectivelyAllowAnonymous || (!IsEffectivelyAuthorized);
 
     /// <summary>
     /// Gets all effective roles including inherited ones.

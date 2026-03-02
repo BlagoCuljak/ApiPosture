@@ -25,8 +25,8 @@ public sealed class PublicWithoutExplicitIntentRule : ISecurityRule
         if (endpoint.Classification != SecurityClassification.Public)
             return null;
 
-        // If AllowAnonymous is explicitly set, the intent is clear
-        if (endpoint.Authorization.HasAllowAnonymous)
+        // If AllowAnonymous is explicitly set (directly or inherited from controller), the intent is clear
+        if (endpoint.Authorization.IsEffectivelyAllowAnonymous)
             return null;
 
         // Check for custom authorization attributes

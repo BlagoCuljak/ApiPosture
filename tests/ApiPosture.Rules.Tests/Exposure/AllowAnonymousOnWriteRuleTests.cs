@@ -57,6 +57,29 @@ public class AllowAnonymousOnWriteRuleTests
     }
 
     [Fact]
+    public void Evaluate_ControllerLevelAllowAnonymousOnPost_ReturnsFinding()
+    {
+        var endpoint = new Endpoint
+        {
+            Route = "/api/test",
+            Methods = HttpMethod.Post,
+            Type = EndpointType.Controller,
+            Location = new SourceLocation("test.cs", 1),
+            Authorization = new AuthorizationInfo
+            {
+                HasAllowAnonymous = false,
+                InheritedFrom = new AuthorizationInfo { HasAllowAnonymous = true }
+            },
+            Classification = SecurityClassification.Public
+        };
+
+        var finding = _rule.Evaluate(endpoint);
+
+        finding.Should().NotBeNull();
+        finding!.RuleId.Should().Be("AP002");
+    }
+
+    [Fact]
     public void Evaluate_PostWithoutAllowAnonymous_ReturnsNull()
     {
         var endpoint = CreateEndpoint("/api/test", HttpMethod.Post, hasAllowAnonymous: false);

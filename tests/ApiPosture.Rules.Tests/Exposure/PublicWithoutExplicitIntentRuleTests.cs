@@ -47,6 +47,19 @@ public class PublicWithoutExplicitIntentRuleTests
     }
 
     [Fact]
+    public void Evaluate_PublicWithControllerLevelAllowAnonymous_ReturnsNull()
+    {
+        var endpoint = CreateEndpoint(
+            hasAllowAnonymous: false,
+            classification: SecurityClassification.Public,
+            inheritedAuth: new AuthorizationInfo { HasAllowAnonymous = true });
+
+        var finding = _rule.Evaluate(endpoint);
+
+        finding.Should().BeNull();
+    }
+
+    [Fact]
     public void Evaluate_AuthenticatedEndpoint_ReturnsNull()
     {
         var endpoint = CreateEndpoint(
@@ -61,7 +74,8 @@ public class PublicWithoutExplicitIntentRuleTests
     private static Endpoint CreateEndpoint(
         bool hasAuthorize = false,
         bool hasAllowAnonymous = false,
-        SecurityClassification classification = SecurityClassification.Public)
+        SecurityClassification classification = SecurityClassification.Public,
+        AuthorizationInfo? inheritedAuth = null)
     {
         return new Endpoint
         {
@@ -72,7 +86,8 @@ public class PublicWithoutExplicitIntentRuleTests
             Authorization = new AuthorizationInfo
             {
                 HasAuthorize = hasAuthorize,
-                HasAllowAnonymous = hasAllowAnonymous
+                HasAllowAnonymous = hasAllowAnonymous,
+                InheritedFrom = inheritedAuth
             },
             Classification = classification
         };

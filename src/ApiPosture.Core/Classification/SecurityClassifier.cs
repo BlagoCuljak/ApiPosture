@@ -12,8 +12,8 @@ public sealed class SecurityClassifier
     /// </summary>
     public SecurityClassification Classify(AuthorizationInfo auth)
     {
-        // AllowAnonymous takes precedence
-        if (auth.HasAllowAnonymous)
+        // AllowAnonymous takes precedence (including inherited from controller/group)
+        if (auth.IsEffectivelyAllowAnonymous)
             return SecurityClassification.Public;
 
         // If no authorization at all (including inherited)
