@@ -70,6 +70,12 @@ public sealed class AccessibilityHelper
         if (configUseIcons.HasValue)
             return configUseIcons.Value;
 
+        // Auto-detect: disable icons on Windows legacy consoles (cmd.exe, PowerShell)
+        // which cannot render emoji. Windows Terminal sets WT_SESSION and handles emoji fine.
+        if (OperatingSystem.IsWindows()
+            && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WT_SESSION")))
+            return false;
+
         // Default: use icons
         return true;
     }
