@@ -469,3 +469,352 @@ public class RouteGroupRegistryTests
         groups.Should().BeEmpty();
     }
 }
+
+// ---------------------------------------------------------------------------
+// Map*Endpoints naming support
+// ---------------------------------------------------------------------------
+
+public class MapEndpointsNamingTests
+{
+    private readonly ExtensionMethodDiscoverer _discoverer = new();
+
+    [Fact]
+    public void DiscoverExtensionMethods_FindsMapEndpointsSuffixedMethod()
+    {
+        var code = """
+            internal static class RoleEndpoints
+            {
+                internal static void MapRoleEndpoints(this IEndpointRouteBuilder app)
+                {
+                    var group = app.MapGroup("/roles").RequireAuthorization();
+                    group.MapGet("", () => Results.Ok());
+                    group.MapPost("", () => Results.Created());
+                }
+            }
+            """;
+
+        var tree = SourceFileLoader.ParseText(code);
+        var methods = _discoverer.DiscoverExtensionMethods(tree).ToList();
+
+        methods.Should().HaveCount(1);
+        methods[0].MethodName.Should().Be("MapRoleEndpoints");
+        methods[0].ParameterName.Should().Be("app");
+    }
+
+    [Fact]
+    public void DiscoverExtensionMethods_IgnoresNonMapEndpointsPattern()
+    {
+        // "ConfigureEndpoints" does not start with "Map" — should still be ignored
+        var code = """
+            internal static class Utils
+            {
+                internal static void ConfigureEndpoints(this IEndpointRouteBuilder app)
+                {
+                    app.MapGet("/test", () => Results.Ok());
+                }
+            }
+            """;
+
+        var tree = SourceFileLoader.ParseText(code);
+        var methods = _discoverer.DiscoverExtensionMethods(tree).ToList();
+
+        methods.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DiscoverEndpointsInMethod_MapEndpointsSuffix_CombinesGroupRoute()
+    {
+        var code = """
+            internal static class RoleEndpoints
+            {
+                internal static void MapRoleEndpoints(this IEndpointRouteBuilder app)
+                {
+                    var group = app.MapGroup("/roles");
+                    group.MapGet("", () => Results.Ok());
+                    group.MapGet("/{id:guid}", (Guid id) => Results.Ok());
+                    group.MapPost("", () => Results.Created());
+                    group.MapPut("/{id:guid}", (Guid id) => Results.Ok());
+                    group.MapDelete("/{id:guid}", (Guid id) => Results.NoContent());
+                }
+            }
+            """;
+
+        var tree = SourceFileLoader.ParseText(code);
+        var methods = _discoverer.DiscoverExtensionMethods(tree).ToList();
+        methods.Should().HaveCount(1);
+
+        var endpoints = _discoverer.DiscoverEndpointsInMethod(
+            methods[0],
+            string.Empty,
+            AuthorizationInfo.Empty,
+            GlobalAuthorizationInfo.Empty).ToList();
+
+        endpoints.Should().HaveCount(5);
+        endpoints.Should().Contain(e => e.Route == "/roles" && e.Methods == HttpMethod.Get);
+        endpoints.Should().Contain(e => e.Route == "/roles/{id:guid}" && e.Methods == HttpMethod.Get);
+        endpoints.Should().Contain(e => e.Route == "/roles" && e.Methods == HttpMethod.Post);
+        endpoints.Should().Contain(e => e.Route == "/roles/{id:guid}" && e.Methods == HttpMethod.Put);
+        endpoints.Should().Contain(e => e.Route == "/roles/{id:guid}" && e.Methods == HttpMethod.Delete);
+    }
+
+    [Fact]
+    public void DiscoverEndpointsInMethod_MapEndpointsSuffix_InheritsGroupAuth()
+    {
+        var code = """
+            internal static class RoleEndpoints
+            {
+                internal static void MapRoleEndpoints(this IEndpointRouteBuilder app)
+                {
+                    var group = app.MapGroup("/roles").RequireAuthorization("WebApp");
+                    group.MapGet("", () => Results.Ok());
+                    group.MapPost("", () => Results.Created());
+                }
+            }
+            """;
+
+        var tree = SourceFileLoader.ParseText(code);
+        var methods = _discoverer.DiscoverExtensionMethods(tree).ToList();
+        methods.Should().HaveCount(1);
+
+        var endpoints = _discoverer.DiscoverEndpointsInMethod(
+            methods[0],
+            string.Empty,
+            AuthorizationInfo.Empty,
+            GlobalAuthorizationInfo.Empty).ToList();
+
+        endpoints.Should().HaveCount(2);
+        endpoints.Should().OnlyContain(e => e.Authorization.IsEffectivelyAuthorized);
+    }
+}
+
+public class RouteGroupRegistryDirectCallTests
+{
+    private readonly RouteGroupRegistry _registry = new();
+
+    [Fact]
+    public void Analyze_RegistersSyntheticGroupForDirectMapEndpointsCall()
+    {
+        var code = """
+            app.MapRoleEndpoints();
+            """;
+
+        var tree = SourceFileLoader.ParseText(code);
+        _registry.Analyze(tree);
+
+        var groups = _registry.GetGroupsCallingMethod("MapRoleEndpoints").ToList();
+        groups.Should().HaveCount(1);
+        groups[0].RoutePrefix.Should().BeEmpty();
+        groups[0].Authorization.HasAuthorize.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Analyze_RegistersSyntheticGroupForDirectMapRoutesCall()
+    {
+        var code = """
+            app.MapTasksRoutes();
+            """;
+
+        var tree = SourceFileLoader.ParseText(code);
+        _registry.Analyze(tree);
+
+        var groups = _registry.GetGroupsCallingMethod("MapTasksRoutes").ToList();
+        groups.Should().HaveCount(1);
+        groups[0].RoutePrefix.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Analyze_RegistersOneSyntheticGroupPerMethodNameEvenIfCalledMultipleTimes()
+    {
+        // Same method called twice in the same file — only one RouteGroupInfo should be created
+        var code = """
+            app.MapRoleEndpoints();
+            // called again somewhere
+            app.MapRoleEndpoints();
+            """;
+
+        var tree = SourceFileLoader.ParseText(code);
+        _registry.Analyze(tree);
+
+        var groups = _registry.GetGroupsCallingMethod("MapRoleEndpoints").ToList();
+        groups.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void Analyze_DoesNotRegisterSyntheticGroupForMapGroupVariableCalls()
+    {
+        // Calls on known MapGroup variables must NOT be duplicated as synthetic root groups
+        var code = """
+            var adminGroup = app.MapGroup("/admin").RequireAuthorization("Admin");
+            adminGroup.MapAdminRoutes();
+            """;
+
+        var tree = SourceFileLoader.ParseText(code);
+        _registry.Analyze(tree);
+
+        // Should have exactly one group — the real MapGroup one, NOT a synthetic duplicate
+        _registry.RouteGroups.Should().HaveCount(1);
+        _registry.RouteGroups[0].RoutePrefix.Should().Be("/admin");
+        _registry.RouteGroups[0].Authorization.HasAuthorize.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Analyze_HandlesMultipleDirectEndpointMethodCalls()
+    {
+        var code = """
+            app.MapRoleEndpoints();
+            app.MapUserEndpoints();
+            app.MapAuthEndpoints();
+            """;
+
+        var tree = SourceFileLoader.ParseText(code);
+        _registry.Analyze(tree);
+
+        _registry.GetGroupsCallingMethod("MapRoleEndpoints").Should().HaveCount(1);
+        _registry.GetGroupsCallingMethod("MapUserEndpoints").Should().HaveCount(1);
+        _registry.GetGroupsCallingMethod("MapAuthEndpoints").Should().HaveCount(1);
+    }
+}
+
+/// <summary>
+/// End-to-end integration tests that exercise the full ProjectAnalyzer pipeline
+/// with the Map*Endpoints pattern (mirroring the user's real-world code structure).
+/// </summary>
+public class MapEndpointsIntegrationTests
+{
+    [Fact]
+    public void ProjectAnalyzer_DiscoversEndpoints_WhenRegisteredViaDirectMapEndpointsCall()
+    {
+        // program.cs: direct call on app
+        var programCode = """
+            app.MapRoleEndpoints();
+            """;
+
+        // RoleEndpoints.cs: extension method with Map*Endpoints suffix
+        var endpointsCode = """
+            internal static class RoleEndpoints
+            {
+                internal static void MapRoleEndpoints(this IEndpointRouteBuilder app)
+                {
+                    var group = app.MapGroup("/api/roles")
+                        .RequireAuthorization();
+
+                    group.MapGet("", GetRoles);
+                    group.MapGet("/{id:guid}", GetRoleById);
+                    group.MapPost("", CreateRole);
+                    group.MapPut("/{id:guid}", UpdateRole);
+                    group.MapDelete("/{id:guid}", DeleteRole);
+                }
+            }
+            """;
+
+        var trees = new[]
+        {
+            SourceFileLoader.ParseText(programCode, "Program.cs"),
+            SourceFileLoader.ParseText(endpointsCode, "RoleEndpoints.cs")
+        };
+
+        var registry = new RouteGroupRegistry();
+        var extDiscoverer = new ExtensionMethodDiscoverer();
+
+        foreach (var tree in trees)
+            registry.Analyze(tree);
+
+        var extensionMethods = trees.SelectMany(extDiscoverer.DiscoverExtensionMethods).ToList();
+        extensionMethods.Should().HaveCount(1, "MapRoleEndpoints should be discovered");
+
+        var globalAuth = GlobalAuthorizationInfo.Empty;
+        var allEndpoints = new List<Endpoint>();
+
+        foreach (var method in extensionMethods)
+        {
+            var groups = registry.GetGroupsCallingMethod(method.MethodName).ToList();
+            groups.Should().HaveCount(1, $"{method.MethodName} should have one registered call site");
+
+            foreach (var group in groups)
+            {
+                allEndpoints.AddRange(
+                    extDiscoverer.DiscoverEndpointsInMethod(method, group.RoutePrefix, group.Authorization, globalAuth));
+            }
+        }
+
+        allEndpoints.Should().HaveCount(5);
+        allEndpoints.Should().Contain(e => e.Route == "/api/roles" && e.Methods == HttpMethod.Get);
+        allEndpoints.Should().Contain(e => e.Route == "/api/roles/{id:guid}" && e.Methods == HttpMethod.Get);
+        allEndpoints.Should().Contain(e => e.Route == "/api/roles" && e.Methods == HttpMethod.Post);
+        allEndpoints.Should().Contain(e => e.Route == "/api/roles/{id:guid}" && e.Methods == HttpMethod.Put);
+        allEndpoints.Should().Contain(e => e.Route == "/api/roles/{id:guid}" && e.Methods == HttpMethod.Delete);
+        allEndpoints.Should().OnlyContain(e => e.Authorization.IsEffectivelyAuthorized,
+            "group has RequireAuthorization()");
+    }
+
+    [Fact]
+    public void ProjectAnalyzer_DiscoversEndpoints_WhenNestedViaRegisterEndpointsCoordinator()
+    {
+        // Mirrors the exact structure from the issue:
+        //   app.RegisterEndpoints() → app.MapAuthEndpoints() → app.MapRoleEndpoints()
+        // RegisterEndpoints is not Map* so it's ignored — but MapRoleEndpoints IS discovered
+        // because the direct call on app is picked up by AnalyzeDirectExtensionMethodCalls.
+
+        var registerCode = """
+            app.RegisterEndpoints();
+            """;
+
+        var authGroupCode = """
+            internal static class AuthEndpoints
+            {
+                internal static void MapAuthEndpoints(this IEndpointRouteBuilder app)
+                {
+                    app.MapRoleEndpoints();
+                }
+            }
+            """;
+
+        var roleCode = """
+            internal static class RoleEndpoints
+            {
+                internal static void MapRoleEndpoints(this IEndpointRouteBuilder app)
+                {
+                    var group = app.MapGroup("/auth/roles")
+                        .RequireAuthorization("WebApp");
+
+                    group.MapGet("", GetRole);
+                    group.MapPost("", CreateRole);
+                }
+            }
+            """;
+
+        var trees = new[]
+        {
+            SourceFileLoader.ParseText(registerCode, "Program.cs"),
+            SourceFileLoader.ParseText(authGroupCode, "AuthEndpoints.cs"),
+            SourceFileLoader.ParseText(roleCode, "RoleEndpoints.cs")
+        };
+
+        var registry = new RouteGroupRegistry();
+        var extDiscoverer = new ExtensionMethodDiscoverer();
+
+        foreach (var tree in trees)
+            registry.Analyze(tree);
+
+        var extensionMethods = trees.SelectMany(extDiscoverer.DiscoverExtensionMethods).ToList();
+
+        // MapRoleEndpoints is discovered (Map*Endpoints). MapAuthEndpoints also qualifies.
+        extensionMethods.Select(m => m.MethodName).Should().Contain("MapRoleEndpoints");
+
+        var globalAuth = GlobalAuthorizationInfo.Empty;
+        var allEndpoints = new List<Endpoint>();
+
+        foreach (var method in extensionMethods)
+        {
+            foreach (var group in registry.GetGroupsCallingMethod(method.MethodName))
+            {
+                allEndpoints.AddRange(
+                    extDiscoverer.DiscoverEndpointsInMethod(method, group.RoutePrefix, group.Authorization, globalAuth));
+            }
+        }
+
+        allEndpoints.Should().Contain(e => e.Route == "/auth/roles" && e.Methods == HttpMethod.Get);
+        allEndpoints.Should().Contain(e => e.Route == "/auth/roles" && e.Methods == HttpMethod.Post);
+        allEndpoints.Should().OnlyContain(e => e.Authorization.IsEffectivelyAuthorized);
+    }
+}

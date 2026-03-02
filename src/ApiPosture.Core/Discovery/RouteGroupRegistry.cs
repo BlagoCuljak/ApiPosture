@@ -67,6 +67,12 @@ public sealed class RouteGroupRegistry
         {
             AnalyzeFieldDeclaration(fieldDecl, root, filePath);
         }
+
+        // Find direct Map*Routes/Map*Endpoints calls on the app/builder itself (not on a MapGroup variable).
+        // e.g. app.MapRoleEndpoints() or app.MapTasksRoutes() called directly on WebApplication/IEndpointRouteBuilder.
+        // These are registered as root-level groups with an empty prefix so that the extension method
+        // discoverer can still process them and pick up the MapGroup + auth chain inside each method body.
+        AnalyzeDirectExtensionMethodCalls(root, filePath);
     }
 
     private void AnalyzeLocalDeclaration(LocalDeclarationStatementSyntax declaration, CompilationUnitSyntax root, string filePath)
@@ -116,6 +122,64 @@ public sealed class RouteGroupRegistry
                 RoutePrefix = routePrefix,
                 Authorization = auth,
                 ExtensionMethodCalls = extensionCalls,
+                FilePath = filePath
+            });
+        }
+    }
+
+    /// <summary>
+    /// Scans for Map*Routes / Map*Endpoints calls made directly on a non-MapGroup receiver
+    /// (e.g. <c>app.MapRoleEndpoints()</c> where <c>app</c> is a WebApplication or
+    /// IEndpointRouteBuilder that was NOT produced by MapGroup).
+    /// Each unique method name found is registered as a root-level group (empty prefix, no
+    /// inherited auth) so that Phase 6 of ProjectAnalyzer can still correlate it with the
+    /// matching extension method and discover the endpoints declared inside that method.
+    /// </summary>
+    private void AnalyzeDirectExtensionMethodCalls(CompilationUnitSyntax root, string filePath)
+    {
+        // Collect all variable names that are already known MapGroup variables so we can
+        // skip them — they are already handled by AnalyzeLocalDeclaration/AnalyzeFieldDeclaration.
+        var knownGroupVariables = new HashSet<string>(
+            _routeGroups.Select(g => g.VariableName),
+            StringComparer.Ordinal);
+
+        // Track which method names we have already registered from this file so we only
+        // create one synthetic RouteGroupInfo per method name (multiple call sites for the
+        // same method would otherwise produce duplicates).
+        var registeredMethods = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
+                continue;
+
+            var methodName = memberAccess.Name.Identifier.Text;
+
+            // Must match Map*Routes or Map*Endpoints
+            if (!methodName.StartsWith("Map", StringComparison.Ordinal) ||
+                (!methodName.EndsWith("Routes", StringComparison.Ordinal) &&
+                 !methodName.EndsWith("Endpoints", StringComparison.Ordinal)))
+                continue;
+
+            // Skip if already registered from this scan
+            if (!registeredMethods.Add(methodName))
+                continue;
+
+            // Skip if the receiver is a known MapGroup variable (already handled above)
+            if (memberAccess.Expression is IdentifierNameSyntax receiverIdentifier &&
+                knownGroupVariables.Contains(receiverIdentifier.Identifier.Text))
+                continue;
+
+            // Register a synthetic root-level group: empty prefix, no inherited auth.
+            // The extension method body itself will supply its own MapGroup + auth chain.
+            // Any method name that doesn't correspond to a discovered RouteExtensionMethod
+            // will simply produce no endpoints in Phase 6 — no need to pre-filter here.
+            _routeGroups.Add(new RouteGroupInfo
+            {
+                VariableName = $"__direct__{methodName}",
+                RoutePrefix = string.Empty,
+                Authorization = AuthorizationInfo.Empty,
+                ExtensionMethodCalls = [methodName],
                 FilePath = filePath
             });
         }
@@ -244,9 +308,10 @@ public sealed class RouteGroupRegistry
                 var methodName = memberAccess.Name.Identifier.Text;
 
                 // Filter to extension methods that look like route registrations
-                // (commonly Map*Routes pattern)
+                // (Map*Routes or Map*Endpoints pattern)
                 if (methodName.StartsWith("Map", StringComparison.Ordinal) &&
-                    methodName.EndsWith("Routes", StringComparison.Ordinal))
+                    (methodName.EndsWith("Routes", StringComparison.Ordinal) ||
+                     methodName.EndsWith("Endpoints", StringComparison.Ordinal)))
                 {
                     extensionCalls.Add(methodName);
                 }

@@ -14,7 +14,7 @@ namespace ApiPosture.Core.Discovery;
 public sealed class RouteExtensionMethod
 {
     /// <summary>
-    /// The name of the extension method (e.g., "MapTasksRoutes").
+    /// The name of the extension method (e.g., "MapTasksRoutes", "MapRoleEndpoints").
     /// </summary>
     public required string MethodName { get; init; }
 
@@ -108,10 +108,11 @@ public sealed class ExtensionMethodDiscoverer
         if (extendedType == null || !IsRouteBuilderType(extendedType))
             return null;
 
-        // Check if method name matches pattern (Map*Routes)
+        // Check if method name matches pattern (Map*Routes or Map*Endpoints)
         var methodName = method.Identifier.Text;
         if (!methodName.StartsWith("Map", StringComparison.Ordinal) ||
-            !methodName.EndsWith("Routes", StringComparison.Ordinal))
+            (!methodName.EndsWith("Routes", StringComparison.Ordinal) &&
+             !methodName.EndsWith("Endpoints", StringComparison.Ordinal)))
             return null;
 
         var body = method.Body as SyntaxNode ?? method.ExpressionBody;
@@ -150,6 +151,9 @@ public sealed class ExtensionMethodDiscoverer
         // Build map of local group variables to their routes
         var localGroupMap = BuildLocalGroupMap(extensionMethod.MethodBody, extensionMethod.ParameterName);
 
+        // Build map of local group variables to their authorization
+        var localGroupAuthMap = BuildLocalGroupAuthMap(extensionMethod.MethodBody, extensionMethod.ParameterName);
+
         // Find all Map* invocations in the method body
         foreach (var invocation in extensionMethod.MethodBody.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
@@ -160,7 +164,8 @@ public sealed class ExtensionMethodDiscoverer
                 parentRoutePrefix,
                 parentAuth,
                 globalAuth,
-                localGroupMap);
+                localGroupMap,
+                localGroupAuthMap);
 
             if (endpoint != null)
                 yield return endpoint;
@@ -174,7 +179,8 @@ public sealed class ExtensionMethodDiscoverer
         string parentRoutePrefix,
         AuthorizationInfo parentAuth,
         GlobalAuthorizationInfo globalAuth,
-        Dictionary<string, string> localGroupMap)
+        Dictionary<string, string> localGroupMap,
+        Dictionary<string, AuthorizationInfo>? localGroupAuthMap = null)
     {
         var (methodName, httpMethod) = GetMapMethod(invocation);
         if (methodName == null || httpMethod == HttpMethod.None)
@@ -193,6 +199,14 @@ public sealed class ExtensionMethodDiscoverer
         if (calledOnVariable != null && localGroupMap.TryGetValue(calledOnVariable, out var localGroupRoute))
         {
             parentRoutePrefix = CombineRoutes(parentRoutePrefix, localGroupRoute);
+
+            // Inherit auth from the local group variable if it has authorization set
+            if (localGroupAuthMap != null &&
+                localGroupAuthMap.TryGetValue(calledOnVariable, out var localGroupAuth) &&
+                localGroupAuth.IsEffectivelyAuthorized)
+            {
+                parentAuth = localGroupAuth;
+            }
         }
         else
         {
@@ -379,6 +393,141 @@ public sealed class ExtensionMethodDiscoverer
         }
 
         return groupMap;
+    }
+
+    /// <summary>
+    /// Builds a map of local group variable names to the authorization extracted from their
+    /// MapGroup fluent chain (e.g. <c>var g = app.MapGroup("/x").RequireAuthorization()</c>).
+    /// </summary>
+    private static Dictionary<string, AuthorizationInfo> BuildLocalGroupAuthMap(
+        SyntaxNode methodBody,
+        string parameterName)
+    {
+        var authMap = new Dictionary<string, AuthorizationInfo>(StringComparer.Ordinal);
+
+        foreach (var declaration in methodBody.DescendantNodes().OfType<LocalDeclarationStatementSyntax>())
+        {
+            foreach (var variable in declaration.Declaration.Variables)
+            {
+                if (variable.Initializer?.Value is not InvocationExpressionSyntax invocation)
+                    continue;
+
+                // Only process if this initializer is (part of) a MapGroup chain
+                if (!IsMapGroupChain(invocation, parameterName))
+                    continue;
+
+                var auth = ExtractGroupAuthorizationFromChain(invocation);
+                if (auth.IsEffectivelyAuthorized || auth.HasAllowAnonymous)
+                {
+                    authMap[variable.Identifier.Text] = auth;
+                }
+            }
+        }
+
+        return authMap;
+    }
+
+    /// <summary>
+    /// Returns true if the invocation is part of a MapGroup chain rooted at <paramref name="parameterName"/>.
+    /// </summary>
+    private static bool IsMapGroupChain(InvocationExpressionSyntax invocation, string parameterName)
+    {
+        var current = invocation;
+        while (current != null)
+        {
+            var methodName = current.Expression switch
+            {
+                MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                _ => null
+            };
+
+            if (methodName == "MapGroup")
+            {
+                // Check what MapGroup is called on
+                var calledOn = current.Expression switch
+                {
+                    MemberAccessExpressionSyntax ma => ma.Expression,
+                    _ => null
+                };
+
+                if (calledOn is IdentifierNameSyntax id && id.Identifier.Text == parameterName)
+                    return true;
+            }
+
+            current = current.Expression switch
+            {
+                MemberAccessExpressionSyntax ma when ma.Expression is InvocationExpressionSyntax inv => inv,
+                _ => null
+            };
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Walks a MapGroup fluent chain and extracts any authorization configuration.
+    /// </summary>
+    private static AuthorizationInfo ExtractGroupAuthorizationFromChain(InvocationExpressionSyntax invocation)
+    {
+        var hasRequireAuth = false;
+        var hasAllowAnonymous = false;
+        var roles = new List<string>();
+        var policies = new List<string>();
+
+        var current = invocation;
+        while (current != null)
+        {
+            var methodName = current.Expression switch
+            {
+                MemberAccessExpressionSyntax ma => ma.Name.Identifier.Text,
+                _ => null
+            };
+
+            switch (methodName)
+            {
+                case "RequireAuthorization":
+                    hasRequireAuth = true;
+                    foreach (var arg in current.ArgumentList.Arguments)
+                    {
+                        if (arg.Expression is LiteralExpressionSyntax lit &&
+                            lit.IsKind(SyntaxKind.StringLiteralExpression))
+                        {
+                            policies.Add(lit.Token.ValueText);
+                        }
+                    }
+                    break;
+
+                case "AllowAnonymous":
+                    hasAllowAnonymous = true;
+                    break;
+
+                case "RequireRole":
+                    hasRequireAuth = true;
+                    foreach (var arg in current.ArgumentList.Arguments)
+                    {
+                        if (arg.Expression is LiteralExpressionSyntax lit &&
+                            lit.IsKind(SyntaxKind.StringLiteralExpression))
+                        {
+                            roles.Add(lit.Token.ValueText);
+                        }
+                    }
+                    break;
+            }
+
+            current = current.Expression switch
+            {
+                MemberAccessExpressionSyntax ma when ma.Expression is InvocationExpressionSyntax inv => inv,
+                _ => null
+            };
+        }
+
+        return new AuthorizationInfo
+        {
+            HasAuthorize = hasRequireAuth,
+            HasAllowAnonymous = hasAllowAnonymous,
+            Roles = roles,
+            Policies = policies
+        };
     }
 
     /// <summary>
