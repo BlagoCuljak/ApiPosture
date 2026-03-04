@@ -22,14 +22,11 @@ public sealed class MinimalApiWithoutAuthRule : ISecurityRule
             endpoint.Authorization.HasAllowAnonymous)
             return null;
 
-        // GET-only endpoints are lower risk when unauthenticated (read-only, often intentionally public)
-        var severity = endpoint.Methods == HttpMethod.Get ? Severity.Medium : DefaultSeverity;
-
         return new Finding
         {
             RuleId = RuleId,
             RuleName = Name,
-            Severity = severity,
+            Severity = DefaultSeverity,
             Endpoint = endpoint,
             Message = $"Minimal API endpoint '{endpoint.Route}' has no authorization chain.",
             Recommendation = "Add .RequireAuthorization() to require authentication, or .AllowAnonymous() " +

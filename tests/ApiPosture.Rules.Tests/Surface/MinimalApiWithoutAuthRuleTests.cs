@@ -22,27 +22,14 @@ public class MinimalApiWithoutAuthRuleTests
     }
 
     [Fact]
-    public void Evaluate_MinimalApiGetWithoutAuth_ReturnsMediumFinding()
+    public void Evaluate_MinimalApiWithoutAuth_ReturnsFinding()
     {
-        var endpoint = CreateEndpoint(EndpointType.MinimalApi, hasAuthorize: false, hasAllowAnonymous: false, method: HttpMethod.Get);
+        var endpoint = CreateEndpoint(EndpointType.MinimalApi, hasAuthorize: false, hasAllowAnonymous: false);
 
         var finding = _rule.Evaluate(endpoint);
 
         finding.Should().NotBeNull();
         finding!.RuleId.Should().Be("AP008");
-        finding.Severity.Should().Be(Severity.Medium);
-    }
-
-    [Fact]
-    public void Evaluate_MinimalApiPostWithoutAuth_ReturnsHighFinding()
-    {
-        var endpoint = CreateEndpoint(EndpointType.MinimalApi, hasAuthorize: false, hasAllowAnonymous: false, method: HttpMethod.Post);
-
-        var finding = _rule.Evaluate(endpoint);
-
-        finding.Should().NotBeNull();
-        finding!.RuleId.Should().Be("AP008");
-        finding.Severity.Should().Be(Severity.High);
     }
 
     [Fact]
@@ -75,12 +62,12 @@ public class MinimalApiWithoutAuthRuleTests
         finding.Should().BeNull();
     }
 
-    private static Endpoint CreateEndpoint(EndpointType type, bool hasAuthorize, bool hasAllowAnonymous, HttpMethod method = HttpMethod.Get)
+    private static Endpoint CreateEndpoint(EndpointType type, bool hasAuthorize, bool hasAllowAnonymous)
     {
         return new Endpoint
         {
             Route = "/api/test",
-            Methods = method,
+            Methods = HttpMethod.Get,
             Type = type,
             Location = new SourceLocation("test.cs", 1),
             Authorization = new AuthorizationInfo
