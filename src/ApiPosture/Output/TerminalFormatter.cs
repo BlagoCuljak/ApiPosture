@@ -221,11 +221,11 @@ public sealed class TerminalFormatter : IOutputFormatter
         var detailed = findingsList.Where(f => !IsCompactSeverity(f.Severity)).ToList();
         var compact  = findingsList.Where(f => IsCompactSeverity(f.Severity)).ToList();
 
-        foreach (var finding in detailed)
-            RenderFinding(console, finding, options);
-
         if (compact.Count > 0)
             RenderCompactFindings(console, compact, options);
+
+        foreach (var finding in detailed)
+            RenderFinding(console, finding, options);
     }
 
     private void RenderGroupedFindings(IAnsiConsole console, IReadOnlyList<FindingGroup> groups, OutputOptions options)
@@ -238,11 +238,11 @@ public sealed class TerminalFormatter : IOutputFormatter
             var detailed = group.Findings.Where(f => !IsCompactSeverity(f.Severity)).ToList();
             var compact  = group.Findings.Where(f => IsCompactSeverity(f.Severity)).ToList();
 
-            foreach (var finding in detailed)
-                RenderFinding(console, finding, options);
-
             if (compact.Count > 0)
                 RenderCompactFindings(console, compact, options);
+
+            foreach (var finding in detailed)
+                RenderFinding(console, finding, options);
 
             console.WriteLine();
         }

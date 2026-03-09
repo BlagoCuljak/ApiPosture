@@ -70,17 +70,10 @@ public sealed class AccessibilityHelper
         if (configUseIcons.HasValue)
             return configUseIcons.Value;
 
-        // Auto-detect: disable icons on Windows legacy consoles (cmd.exe, PowerShell)
-        // which cannot render emoji. Windows Terminal sets WT_SESSION and handles emoji fine.
-        // JetBrains Rider terminal (JediTerm) sets TERMINAL_EMULATOR and supports Unicode.
+        // Disable icons on Windows entirely - emoji rendering is unreliable across
+        // Windows Terminal versions and font configurations.
         if (OperatingSystem.IsWindows())
-        {
-            var hasWindowsTerminal = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WT_SESSION"));
-            var hasJetBrainsTerminal = Environment.GetEnvironmentVariable("TERMINAL_EMULATOR")
-                ?.Contains("JetBrains", StringComparison.OrdinalIgnoreCase) == true;
-            if (!hasWindowsTerminal && !hasJetBrainsTerminal)
-                return false;
-        }
+            return false;
 
         // Default: use icons
         return true;

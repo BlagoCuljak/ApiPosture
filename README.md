@@ -75,6 +75,8 @@ apiposture scan . --group-findings-by severity
 # Accessibility (no colors/icons)
 apiposture scan . --no-color --no-icons
 
+# Note: icons are not supported on Windows - they are automatically disabled
+
 # Use config file
 apiposture scan . --config .apiposture.json
 ```
