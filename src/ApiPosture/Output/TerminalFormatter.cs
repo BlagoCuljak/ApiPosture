@@ -189,8 +189,10 @@ public sealed class TerminalFormatter : IOutputFormatter
         if (options.UseColors)
         {
             var classColor = options.Accessibility.GetClassificationColor(endpoint.Classification);
-            classificationDisplay = $"[{classColor}]{classIndicator} {endpoint.Classification}[/]";
-            typeDisplay = $"{typeIndicator} {endpoint.Type}";
+            var escapedClassIndicator = Markup.Escape(classIndicator);
+            var escapedTypeIndicator = Markup.Escape(typeIndicator);
+            classificationDisplay = $"[{classColor}]{escapedClassIndicator} {endpoint.Classification}[/]";
+            typeDisplay = $"{escapedTypeIndicator} {endpoint.Type}";
         }
         else
         {
@@ -206,6 +208,9 @@ public sealed class TerminalFormatter : IOutputFormatter
             classificationDisplay);
     }
 
+    private static bool IsCompactSeverity(Severity severity) =>
+        severity is Severity.Low or Severity.Info;
+
     private void RenderFindings(IAnsiConsole console, IEnumerable<Finding> findings, OutputOptions options)
     {
         var findingsList = findings.ToList();
@@ -213,10 +218,14 @@ public sealed class TerminalFormatter : IOutputFormatter
             ? $"[bold]Security Findings ({findingsList.Count})[/]"
             : $"Security Findings ({findingsList.Count})").LeftJustified());
 
-        foreach (var finding in findingsList)
-        {
+        var detailed = findingsList.Where(f => !IsCompactSeverity(f.Severity)).ToList();
+        var compact  = findingsList.Where(f => IsCompactSeverity(f.Severity)).ToList();
+
+        foreach (var finding in detailed)
             RenderFinding(console, finding, options);
-        }
+
+        if (compact.Count > 0)
+            RenderCompactFindings(console, compact, options);
     }
 
     private void RenderGroupedFindings(IAnsiConsole console, IReadOnlyList<FindingGroup> groups, OutputOptions options)
@@ -226,13 +235,59 @@ public sealed class TerminalFormatter : IOutputFormatter
             var header = $"{group.DisplayName} ({group.Count})";
             console.Write(new Rule(options.UseColors ? $"[bold]{Markup.Escape(header)}[/]" : header).LeftJustified());
 
-            foreach (var finding in group.Findings)
-            {
+            var detailed = group.Findings.Where(f => !IsCompactSeverity(f.Severity)).ToList();
+            var compact  = group.Findings.Where(f => IsCompactSeverity(f.Severity)).ToList();
+
+            foreach (var finding in detailed)
                 RenderFinding(console, finding, options);
-            }
+
+            if (compact.Count > 0)
+                RenderCompactFindings(console, compact, options);
 
             console.WriteLine();
         }
+    }
+
+    private void RenderCompactFindings(IAnsiConsole console, IEnumerable<Finding> findings, OutputOptions options)
+    {
+        var list = findings.ToList();
+        var label = list.Count == 1 ? "1 low-severity finding" : $"{list.Count} low-severity findings";
+        var ruleLabel = options.UseColors ? $"[dim]{label}[/]" : label;
+        console.Write(new Rule(ruleLabel).LeftJustified());
+
+        var table = new Table()
+            .Border(TableBorder.Simple)
+            .AddColumn("ID")
+            .AddColumn("Severity")
+            .AddColumn("Route")
+            .AddColumn("Rule")
+            .AddColumn("Message");
+
+        foreach (var finding in list)
+        {
+            var severityIndicator = options.Accessibility.GetSeverityIndicator(finding.Severity);
+
+            string severityCell;
+            if (options.UseColors)
+            {
+                var color = options.Accessibility.GetSeverityColor(finding.Severity);
+                var escapedIndicator = Markup.Escape(severityIndicator);
+                severityCell = $"[{color}]{escapedIndicator} {finding.Severity}[/]";
+            }
+            else
+            {
+                severityCell = Markup.Escape($"{severityIndicator} {finding.Severity}");
+            }
+
+            table.AddRow(
+                Markup.Escape(finding.RuleId),
+                severityCell,
+                Markup.Escape(finding.Endpoint.Route),
+                Markup.Escape(finding.RuleName),
+                Markup.Escape(finding.Message));
+        }
+
+        console.Write(table);
     }
 
     private void RenderFinding(IAnsiConsole console, Finding finding, OutputOptions options)
@@ -244,7 +299,8 @@ public sealed class TerminalFormatter : IOutputFormatter
         if (options.UseColors)
         {
             var severityColor = options.Accessibility.GetSeverityColor(finding.Severity);
-            headerText = $"[{severityColor}]{severityIndicator} [[{finding.RuleId}]] {escapedRuleName} ({finding.Severity})[/]";
+            var escapedSeverityIndicator = Markup.Escape(severityIndicator);
+            headerText = $"[{severityColor}]{escapedSeverityIndicator} [[{finding.RuleId}]] {escapedRuleName} ({finding.Severity})[/]";
         }
         else
         {
