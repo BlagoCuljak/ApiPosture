@@ -8,6 +8,37 @@ namespace ApiPosture.Rules;
 /// </summary>
 public static class AnonymousWriteClassifier
 {
+    // Auth action names that identify login/registration endpoints regardless of controller prefix.
+    private static readonly HashSet<string> KnownAuthActions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "login", "signin", "register", "signup", "token",
+        "refresh", "revoke", "authenticate", "logout", "signout"
+    };
+
+    /// <summary>
+    /// Returns true for endpoint routes that are authentication endpoints by convention.
+    /// These are intentionally public by design and do not benefit from AP001/AP004 findings.
+    /// Used to suppress false positives on well-known public patterns.
+    ///
+    /// Matches:
+    ///   - Well-known auth/identity/account controller prefixes (/auth/, /identity/, /account/)
+    ///   - Terminal route segments that are recognised auth actions (login, register, signin, etc.)
+    ///     regardless of the controller prefix, e.g. /api/identity/login or /api/users/login.
+    /// </summary>
+    public static bool IsKnownAuthEndpoint(Endpoint endpoint)
+    {
+        var route = endpoint.Route.ToLowerInvariant();
+
+        // Well-known controller namespaces used for authentication
+        if (route.Contains("/auth/") || route.Contains("/identity/") || route.Contains("/account/"))
+            return true;
+
+        // Match by terminal path segment so /login matches but /login-history does not
+        var segments = route.Split('/');
+        var lastSegment = segments.LastOrDefault(s => s.Length > 0 && !s.StartsWith('{')) ?? string.Empty;
+        return KnownAuthActions.Contains(lastSegment);
+    }
+
     /// <summary>
     /// Categorizes an anonymous write endpoint and returns appropriate severity and context message.
     /// </summary>
@@ -21,10 +52,7 @@ public static class AnonymousWriteClassifier
             return (Severity.Medium, "Webhook endpoints require signature validation instead of authentication.");
 
         // Authentication endpoints - must be public by design
-        if (route.Contains("/auth/login") || route.Contains("/auth/register") ||
-            route.Contains("/auth/refresh") || route.Contains("/auth/revoke") ||
-            route.Contains("/signin") || route.Contains("/signup") ||
-            route.Contains("/token"))
+        if (IsKnownAuthEndpoint(endpoint))
             return (Severity.Low, "Authentication endpoints are intentionally public. Ensure rate limiting and account lockout are implemented.");
 
         // Counter/analytics endpoints - low risk, intentionally public

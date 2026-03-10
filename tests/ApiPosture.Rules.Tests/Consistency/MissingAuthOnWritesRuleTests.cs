@@ -117,8 +117,9 @@ public class MissingAuthOnWritesRuleTests
     }
 
     [Fact]
-    public void Evaluate_AuthLoginEndpoint_ReturnsMediumSeverity()
+    public void Evaluate_AuthLoginEndpoint_ReturnsNull()
     {
+        // Auth endpoints are known-public by convention — AP004 should not fire (false positive suppression)
         var endpoint = CreateEndpoint(
             "/api/Auth/login",
             methods: HttpMethod.Post,
@@ -126,14 +127,13 @@ public class MissingAuthOnWritesRuleTests
 
         var finding = _rule.Evaluate(endpoint);
 
-        finding.Should().NotBeNull();
-        finding!.Severity.Should().Be(Severity.Medium);
-        finding.Message.Should().Contain("rate limiting");
+        finding.Should().BeNull();
     }
 
     [Fact]
-    public void Evaluate_AuthRegisterEndpoint_ReturnsMediumSeverity()
+    public void Evaluate_AuthRegisterEndpoint_ReturnsNull()
     {
+        // Auth endpoints are known-public by convention — AP004 should not fire (false positive suppression)
         var endpoint = CreateEndpoint(
             "/api/Auth/register",
             methods: HttpMethod.Post,
@@ -141,13 +141,13 @@ public class MissingAuthOnWritesRuleTests
 
         var finding = _rule.Evaluate(endpoint);
 
-        finding.Should().NotBeNull();
-        finding!.Severity.Should().Be(Severity.Medium);
+        finding.Should().BeNull();
     }
 
     [Fact]
-    public void Evaluate_AuthRefreshTokenEndpoint_ReturnsMediumSeverity()
+    public void Evaluate_AuthRefreshTokenEndpoint_ReturnsNull()
     {
+        // Auth endpoints are known-public by convention — AP004 should not fire (false positive suppression)
         var endpoint = CreateEndpoint(
             "/api/Auth/refresh-token",
             methods: HttpMethod.Post,
@@ -155,8 +155,7 @@ public class MissingAuthOnWritesRuleTests
 
         var finding = _rule.Evaluate(endpoint);
 
-        finding.Should().NotBeNull();
-        finding!.Severity.Should().Be(Severity.Medium);
+        finding.Should().BeNull();
     }
 
     [Fact]

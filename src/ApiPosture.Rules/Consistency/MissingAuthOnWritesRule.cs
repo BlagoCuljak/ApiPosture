@@ -33,6 +33,11 @@ public sealed class MissingAuthOnWritesRule : ISecurityRule
         if (endpoint.Authorization.HasAllowAnonymous)
             return null;
 
+        // Auth endpoints (login, register, token, etc.) are public by convention — suppress false positives.
+        // AP104 (InsecureDesign) covers the rate-limiting reminder for these endpoints in Pro.
+        if (AnonymousWriteClassifier.IsKnownAuthEndpoint(endpoint))
+            return null;
+
         // Check for custom authorization attributes
         if (HasCustomAuthorizationAttribute(endpoint))
             return null;

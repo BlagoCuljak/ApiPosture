@@ -29,6 +29,10 @@ public sealed class PublicWithoutExplicitIntentRule : ISecurityRule
         if (endpoint.Authorization.IsEffectivelyAllowAnonymous)
             return null;
 
+        // Auth endpoints (login, register, token, etc.) are public by convention — suppress false positives
+        if (AnonymousWriteClassifier.IsKnownAuthEndpoint(endpoint))
+            return null;
+
         // Check for custom authorization attributes
         if (HasCustomAuthorizationAttribute(endpoint))
             return null;

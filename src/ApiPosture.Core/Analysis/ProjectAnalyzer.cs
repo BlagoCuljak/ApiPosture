@@ -22,7 +22,8 @@ public sealed class ProjectAnalyzer
         new IEndpointDiscoverer[]
         {
             new ControllerEndpointDiscoverer(),
-            new MinimalApiEndpointDiscoverer()
+            new MinimalApiEndpointDiscoverer(),
+            new EndpointGroupDiscoverer()
         },
         new GlobalAuthorizationAnalyzer(),
         new RouteGroupRegistry(),
