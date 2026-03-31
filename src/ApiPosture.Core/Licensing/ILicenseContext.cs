@@ -65,6 +65,9 @@ public static class LicenseTier
     /// Pro tier with all paid features.
     /// </summary>
     public const string Pro = "Pro";
+
+    /// <summary>Enterprise tier with all Pro + enterprise features.</summary>
+    public const string Enterprise = "Enterprise";
 }
 
 /// <summary>
@@ -108,6 +111,32 @@ public static class LicenseFeatures
         AdvancedOwaspRules,
         SecretsScanning
     };
+
+    public const string ComplianceReports = "compliance-reports";
+    public const string ComplianceScore = "compliance-score";
+    public const string StarterKits = "starter-kits";
+    public const string RemediationGuidance = "remediation-guidance";
+    public const string PolicyEnforcement = "policy-enforcement";
+    public const string PrGate = "pr-gate";
+    public const string AuditTrail = "audit-trail";
+    public const string OperatorAttribution = "operator-attribution";
+
+    public static readonly IReadOnlyList<string> AllEnterpriseFeatures = new[]
+    {
+        DiffMode,
+        HistoricalTracking,
+        RiskScoring,
+        AdvancedOwaspRules,
+        SecretsScanning,
+        ComplianceReports,
+        ComplianceScore,
+        StarterKits,
+        RemediationGuidance,
+        PolicyEnforcement,
+        PrGate,
+        AuditTrail,
+        OperatorAttribution
+    };
 }
 
 /// <summary>
@@ -148,4 +177,17 @@ public sealed class FreeLicenseContext : ILicenseContext
 
     /// <inheritdoc />
     public bool HasAllFeatures(IEnumerable<string> features) => !features.Any();
+}
+
+/// <summary>Tier helper extension methods for ILicenseContext.</summary>
+public static class LicenseContextExtensions
+{
+    /// <summary>Returns true for Pro or Enterprise tier.</summary>
+    public static bool IsProOrHigher(this ILicenseContext ctx) =>
+        string.Equals(ctx.Tier, LicenseTier.Pro, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(ctx.Tier, LicenseTier.Enterprise, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Returns true for Enterprise tier only.</summary>
+    public static bool IsEnterpriseOrHigher(this ILicenseContext ctx) =>
+        string.Equals(ctx.Tier, LicenseTier.Enterprise, StringComparison.OrdinalIgnoreCase);
 }
