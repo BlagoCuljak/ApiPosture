@@ -26,7 +26,7 @@ public sealed class ScanCommand : Command<ScanCommand.Settings>
         public string? Path { get; init; }
 
         // Output options
-        [Description("Output format (terminal, json, markdown)")]
+        [Description("Output format (terminal, json, markdown, html)")]
         [CommandOption("-o|--output")]
         [DefaultValue("terminal")]
         public string Output { get; init; } = "terminal";
@@ -229,6 +229,11 @@ public sealed class ScanCommand : Command<ScanCommand.Settings>
             case "markdown" or "md":
                 var markdownFormatter = new MarkdownFormatter();
                 formattedOutput = markdownFormatter.Format(result, outputOptions);
+                break;
+
+            case "html":
+                var htmlFormatter = new HtmlFormatter();
+                formattedOutput = htmlFormatter.Format(result, outputOptions);
                 break;
 
             default:

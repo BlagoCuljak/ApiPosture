@@ -22,7 +22,7 @@ A cross-platform CLI security inspection tool for ASP.NET Core APIs. Performs st
 - Static analysis of ASP.NET Core projects (no compilation required)
 - Discovers endpoints from both Controllers and Minimal APIs
 - Detects 8 common security issues with authorization
-- Multiple output formats: Terminal, JSON, Markdown
+- Multiple output formats: Terminal, JSON, Markdown, HTML
 - Sorting, filtering, and grouping of results
 - Configuration file support with suppressions
 - Accessibility options (no-color, no-icons)
@@ -54,6 +54,9 @@ apiposture scan . --output json
 
 # Output as Markdown report
 apiposture scan . --output markdown --output-file report.md
+
+# Output as HTML report
+apiposture scan . --output html --output-file report.html
 
 # Filter by severity
 apiposture scan . --severity medium
@@ -219,6 +222,13 @@ jobs:
         apiposture scan ./src/YourWebApi \
           --output markdown \
           --output-file api-security-report.md
+
+    - name: Generate HTML report
+      if: always()
+      run: |
+        apiposture scan ./src/YourWebApi \
+          --output html \
+          --output-file api-security-report.html
     
     - name: Upload JSON results
       if: always()
@@ -233,6 +243,13 @@ jobs:
       with:
         name: security-scan-report
         path: api-security-report.md
+
+     - name: Upload HTML report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-scan-report
+        path: api-security-report.html
     
     - name: Comment PR with results
       if: github.event_name == 'pull_request' && always()
@@ -258,6 +275,7 @@ jobs:
 - `--fail-on <severity>`: Exit with code 1 if findings of specified severity or higher are found (critical, high, medium, low)
 - `--output json`: Generate machine-readable JSON output for further processing
 - `--output markdown`: Generate human-readable Markdown reports
+-  `--output html`: Generate human-readable HTML reports
 - `--severity <level>`: Set minimum severity level to report
 - `--config .apiposture.json`: Use configuration file for suppressions and custom rules
 

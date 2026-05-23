@@ -35,6 +35,7 @@ app.Configure(config =>
         .WithExample("scan", "./src/MyApi")
         .WithExample("scan", ".", "--output", "json")
         .WithExample("scan", ".", "--output", "markdown", "--output-file", "report.md")
+        .WithExample("scan", ".", "--output", "html", "--output-file", "report.html")
         .WithExample("scan", ".", "--fail-on", "high");
 
     // Note: Extension commands are registered through the extension system.
