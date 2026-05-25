@@ -532,7 +532,7 @@ public sealed class HtmlFormatter : IOutputFormatter
             $"<p><strong>Route:</strong> <code>{HtmlEncode(finding.Endpoint.Route)}</code></p>");
 
         sb.AppendLine(
-            $"<p><strong>Location:</strong> <code>`{finding.Endpoint.Location}`</code></p>");
+            $"<p><strong>Location:</strong> <code>{HtmlEncode(finding.Endpoint.Location.ToString())}</code></p>");
 
         sb.AppendLine($"<p>{HtmlEncode(finding.Message)}</p>");
 
