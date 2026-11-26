@@ -113,6 +113,16 @@ Create `.apiposture.json` in your project root:
 | AP006 | Weak role naming | Low | Generic role names like "User", "Admin" |
 | AP007 | Sensitive route keywords | Medium | `admin`, `debug`, `export` in public routes |
 | AP008 | Minimal API without auth | High | Minimal API endpoint with no auth chain |
+| AP201 | Hardcoded secret | High | Vendor-specific secret formats committed in `.cs`, `appsettings*.json` or `.env` files |
+
+### AP201: Hardcoded secret
+
+AP201 is intentionally narrow to keep false positives low. It only matches well-known, structured credential formats: AWS access key IDs (`AKIA`/`ASIA`), GCP API keys, GitHub tokens (classic and fine-grained), GitLab PATs, Stripe live secret/restricted keys (not publishable `pk_live`), Slack tokens and webhooks, SendGrid keys, npm tokens, DigitalOcean tokens, and PEM private key headers. Generic patterns such as `password=`, `token=`, JWTs and connection strings are not flagged.
+
+- Skipped locations: `test`, `tests`, `spec`, `fixtures`, `testdata`, `samples`, `examples`, `docs`, `bin`, `obj`, `node_modules` directories, `*Test.cs` / `*Tests.cs` files and `*.Tests` projects (relative to the scanned path).
+- Skipped values: anything containing `EXAMPLE`, `XXXX`, `your_`, `your-`, `<`, `>`, `${`, `{{`, `changeme`, `dummy`, `fake`, `sample`, `placeholder` or `redacted` (case-insensitive).
+- Output shows only the first 4 characters of a secret followed by `…`; the full value is never printed. If a secret is found, rotate it.
+- Disable with `"rules": { "AP201": { "enabled": false } }`, or suppress by file path with a suppression whose `route` matches `path/to/File.cs:LINE` (wildcards supported, e.g. `*/Legacy/*`).
 
 ## Example Output
 ### Sample Terminal Output

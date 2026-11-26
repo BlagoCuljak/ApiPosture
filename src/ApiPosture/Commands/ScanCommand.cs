@@ -8,7 +8,7 @@ using ApiPosture.Core.Models;
 using ApiPosture.Core.Sorting;
 using ApiPosture.Output;
 using ApiPosture.Rules;
-using ApiPosture.Services;
+using ApiPosture.Rules.Secrets;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -81,7 +81,7 @@ public sealed class ScanCommand : Command<ScanCommand.Settings>
         [CommandOption("--api-style")]
         public string[]? ApiStyle { get; init; }
 
-        [Description("Filter by rule ID (AP001, AP002, etc.)")]
+        [Description("Filter by rule ID (AP001, AP002, ..., AP201)")]
         [CommandOption("--rule")]
         public string[]? Rules { get; init; }
 
@@ -104,7 +104,7 @@ public sealed class ScanCommand : Command<ScanCommand.Settings>
         public bool NoIcons { get; init; }
     }
 
-    protected override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var path = settings.Path ?? Directory.GetCurrentDirectory();
 
@@ -147,11 +147,10 @@ public sealed class ScanCommand : Command<ScanCommand.Settings>
             failOnSeverity = parsedFailOn;
         }
 
-        // Build rule engine config with extension rules
+        // Build rule engine config
         var ruleEngineConfig = new RuleEngineConfig
         {
-            SensitiveKeywords = config.GetSensitiveKeywords(),
-            ExtensionRules = ServiceLocator.ExtensionRules
+            SensitiveKeywords = config.GetSensitiveKeywords()
         };
 
         // Perform scan
@@ -167,7 +166,16 @@ public sealed class ScanCommand : Command<ScanCommand.Settings>
 
                 ctx.Status("Evaluating security rules...");
                 var ruleEngine = new RuleEngine(ruleEngineConfig);
-                var findings = ruleEngine.Evaluate(analysisResult.Endpoints);
+                var findings = ruleEngine.Evaluate(analysisResult.Endpoints).ToList();
+
+                // AP201: hardcoded secrets (file-based, can be disabled via config)
+                var secretsEnabled = config.Rules is null ||
+                    !config.Rules.TryGetValue(HardcodedSecretRule.RuleId, out var secretsConfig) ||
+                    secretsConfig.Enabled;
+                if (secretsEnabled)
+                {
+                    findings.AddRange(new HardcodedSecretRule().ScanPath(path));
+                }
 
                 // Apply suppressions from config
                 var suppressionMatcher = SuppressionMatcher.FromConfig(config);
